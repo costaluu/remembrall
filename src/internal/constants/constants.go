@@ -7,6 +7,11 @@ import (
 )
 
 var OS_CONFIGS = map[string]map[string]string{
+	"APP_DIR": {
+		"windows": "%APPDATA%\\remembrall",
+		"darwin":  "~/.config/remembrall",
+		"linux":   "~/.config/remembrall",
+	},
 	"APP_CONFIG_FILE_NAME": {
 		"windows": "%APPDATA%\\remembrall\\config.json",
 		"darwin":  "~/.config/remembrall/config.json",

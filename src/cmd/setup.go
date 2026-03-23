@@ -27,8 +27,25 @@ var SetupCommand *cli.Command = &cli.Command{
 			dbLocation = dbLocationFallback
 		}
 
-		runner := func() {
+		var dateTimeFormat string
 
+		huh.NewSelect[string]().
+			Title("Select your preferred date and time format").
+			Options(
+				huh.NewOption("European (DD/MM/YYYY HH:MM:SS)", "02/01/2006 15:04:05"),
+				huh.NewOption("American (MM/DD/YYYY HH:MM:SS)", "01/02/2006 15:04:05"),
+			).
+			Value(&dateTimeFormat).
+			Run()
+
+		var startOnStartup bool
+
+		huh.NewConfirm().
+			Title("Do you want remembrall to start on startup?").
+			Value(&startOnStartup).
+			Run()
+
+		runner := func() {
 		}
 
 		_ = spinner.New().

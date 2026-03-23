@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	logger "github.com/costaluu/remembrall/src/internal"
+	"github.com/costaluu/remembrall/src/internal/logger"
 )
 
 var fileMutex sync.Mutex = sync.Mutex{}
@@ -23,7 +23,7 @@ func FileDeleteFolder(path string) error {
 	_, err := os.Getwd()
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	// Check if the folder exists
@@ -36,7 +36,7 @@ func FileDeleteFolder(path string) error {
 	err = os.RemoveAll(path)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return nil
@@ -73,28 +73,28 @@ func FileCopy(src, dst string) error {
 	// Open the source file
 	sourceFile, err := os.Open(src)
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 	defer sourceFile.Close()
 
 	// Create the destination file
 	destinationFile, err := os.Create(dst)
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 	defer destinationFile.Close()
 
 	// Copy the content from the source to the destination
 	_, err = io.Copy(destinationFile, sourceFile)
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	// Flush writes to disk
 	err = destinationFile.Sync()
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return nil
@@ -109,7 +109,7 @@ func RemoveFile(filePath string) error {
 	err := os.Remove(filePath)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return nil
@@ -120,7 +120,7 @@ func FileWriteContentToFile(filePath string, content string) error {
 	err := os.WriteFile(filePath, []byte(content), 0644)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return nil
@@ -135,7 +135,7 @@ func FileWrite(reader io.Reader, filePath string) error {
 	file, err := os.Create(filePath)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	defer file.Close()
@@ -143,14 +143,14 @@ func FileWrite(reader io.Reader, filePath string) error {
 	// Copy the contents from the reader to the file
 	_, err = io.Copy(file, reader)
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	// Ensure all data is written to disk
 	err = file.Sync()
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return nil
@@ -162,7 +162,7 @@ func FileListDir(rootDir string) []string {
 	entries, err := os.ReadDir(rootDir)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	for _, entry := range entries {
@@ -190,13 +190,13 @@ func FileWriteJSONToFile(filePath string, data interface{}) error {
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	// Create or open the file at the given path
 	file, err := os.Create(filePath)
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 	defer file.Close()
 
@@ -204,7 +204,7 @@ func FileWriteJSONToFile(filePath string, data interface{}) error {
 	_, err = file.Write(jsonData)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return nil
@@ -217,14 +217,14 @@ func FileReadJSONFromFile(filePath string, result interface{}) error {
 
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	// Unmarshal the JSON into the result interface
 	err = json.Unmarshal(fileContent, result)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return nil
@@ -235,7 +235,7 @@ func FileCreateFolder(path string) error {
 	err := os.Mkdir(path, 0755)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return nil
@@ -245,14 +245,14 @@ func FileGenerateCheckSum(path string) string {
 	f, err := os.Open(path)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 	defer f.Close()
 
 	h := sha256.New()
 
 	if _, err := io.Copy(h, f); err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil))
@@ -265,7 +265,7 @@ func FileRead(path string) string {
 	data, err := os.ReadFile(path)
 
 	if err != nil {
-		logger.Fatal[error](err)
+		logger.Fatal(err)
 	}
 
 	return string(data)
