@@ -1,0 +1,264 @@
+name: Auto Versioning & Release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Version, Tag & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # ─── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # necessário para git log e git tag completos
+
+      # ─── Validação de branch ─────────────────────────────────────────────────
+      - name: Abort if not master
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          if [ "$BRANCH" != "master" ]; then
+            echo "Branch atual: $BRANCH. Apenas 'master' é permitida. Abortando."
+            exit 1
+          fi
+
+      # ─── Última tag ──────────────────────────────────────────────────────────
+      - name: Get latest semver tag
+        id: last_tag
+        run: |
+          # Lista todas as tags, filtra apenas as que seguem vX.Y.Z
+          LATEST=$(git tag --list \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -t. -V \
+            | tail -n 1)
+
+          if [ -z "$LATEST" ]; then
+            echo "Nenhuma tag semver encontrada. Usando v0.0.0 como base."
+            LATEST="v0.0.0"
+            echo "is_first_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Última tag: $LATEST"
+            echo "is_first_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+
+      # ─── Coleta de commits ───────────────────────────────────────────────────
+      - name: Collect commits since last tag
+        id: commits
+        run: |
+          LAST_TAG="${{ steps.last_tag.outputs.tag }}"
+          IS_FIRST="${{ steps.last_tag.outputs.is_first_release }}"
+
+          if [ "$IS_FIRST" = "true" ]; then
+            MESSAGES=$(git log --pretty=format:"%s")
+          else
+            MESSAGES=$(git log "${LAST_TAG}..HEAD" --pretty=format:"%s")
+          fi
+
+          if [ -z "$MESSAGES" ]; then
+            echo "Nenhum commit novo desde $LAST_TAG. Nada a publicar."
+            echo "has_commits=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_commits=true" >> "$GITHUB_OUTPUT"
+            # Salva em arquivo para evitar problemas com caracteres especiais
+            echo "$MESSAGES" > /tmp/commit_messages.txt
+            cat /tmp/commit_messages.txt
+          fi
+
+      # ─── Decisão de incremento ───────────────────────────────────────────────
+      - name: Determine version bump type
+        id: bump
+        if: steps.commits.outputs.has_commits == 'true'
+        run: |
+          MESSAGES=$(cat /tmp/commit_messages.txt)
+
+          if echo "$MESSAGES" | grep -qiE 'BREAKING CHANGE'; then
+            BUMP="major"
+          elif echo "$MESSAGES" | grep -qE '^feat(\(.+\))?:'; then
+            BUMP="minor"
+          else
+            BUMP="patch"
+          fi
+
+          echo "Tipo de incremento: $BUMP"
+          echo "type=$BUMP" >> "$GITHUB_OUTPUT"
+
+      # ─── Cálculo da nova versão ──────────────────────────────────────────────
+      - name: Calculate next version
+        id: next_version
+        if: steps.commits.outputs.has_commits == 'true'
+        run: |
+          LAST_TAG="${{ steps.last_tag.outputs.tag }}"
+          BUMP="${{ steps.bump.outputs.type }}"
+
+          # Remove o 'v' e parseia X.Y.Z
+          VERSION="${LAST_TAG#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          case "$BUMP" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Nova versão: $NEW_TAG"
+          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+
+      # ─── Idempotência — tag já existe? ───────────────────────────────────────
+      - name: Check if tag already exists
+        id: tag_check
+        if: steps.commits.outputs.has_commits == 'true'
+        run: |
+          NEW_TAG="${{ steps.next_version.outputs.tag }}"
+
+          if git tag --list | grep -qx "$NEW_TAG"; then
+            echo "Tag $NEW_TAG já existe. Abortando para manter idempotência."
+            echo "already_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ─── Criação e push da tag ───────────────────────────────────────────────
+      - name: Create and push tag
+        if: |
+          steps.commits.outputs.has_commits == 'true' &&
+          steps.tag_check.outputs.already_exists == 'false'
+        run: |
+          NEW_TAG="${{ steps.next_version.outputs.tag }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
+          echo "Tag $NEW_TAG publicada com sucesso."
+
+      # ─── Build dos binários (multi-OS / multi-ARCH) ──────────────────────────
+      - name: Set up Go
+        if: |
+          steps.commits.outputs.has_commits == 'true' &&
+          steps.tag_check.outputs.already_exists == 'false'
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Build binaries
+        if: |
+          steps.commits.outputs.has_commits == 'true' &&
+          steps.tag_check.outputs.already_exists == 'false'
+        run: |
+          NEW_TAG="${{ steps.next_version.outputs.tag }}"
+          mkdir -p dist
+
+          declare -A TARGETS=(
+            ["linux/amd64"]="linux-amd64"
+            ["linux/arm64"]="linux-arm64"
+            ["darwin/amd64"]="darwin-amd64"
+            ["darwin/arm64"]="darwin-arm64"
+            ["windows/amd64"]="windows-amd64"
+          )
+
+          for PLATFORM in "${!TARGETS[@]}"; do
+            OS="${PLATFORM%%/*}"
+            ARCH="${PLATFORM##*/}"
+            SUFFIX="${TARGETS[$PLATFORM]}"
+
+            OUTPUT="dist/cli-${NEW_TAG}-${SUFFIX}"
+            [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
+
+            echo "Building $OUTPUT..."
+            GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.version=${NEW_TAG}" \
+              -o "$OUTPUT" ./...
+          done
+
+          ls -lh dist/
+
+      # ─── Geração do Changelog ────────────────────────────────────────────────
+      - name: Generate release notes
+        id: changelog
+        if: |
+          steps.commits.outputs.has_commits == 'true' &&
+          steps.tag_check.outputs.already_exists == 'false'
+        run: |
+          LAST_TAG="${{ steps.last_tag.outputs.tag }}"
+          IS_FIRST="${{ steps.last_tag.outputs.is_first_release }}"
+          NEW_TAG="${{ steps.next_version.outputs.tag }}"
+          BUMP="${{ steps.bump.outputs.type }}"
+
+          {
+            echo "## Release ${NEW_TAG}"
+            echo ""
+            echo "**Tipo de incremento:** \`${BUMP}\`"
+            echo ""
+
+            echo "### Commits incluídos"
+            echo ""
+
+            if [ "$IS_FIRST" = "true" ]; then
+              git log --pretty=format:"- %s (%h)" | head -50
+            else
+              git log "${LAST_TAG}..HEAD" --pretty=format:"- %s (%h)"
+            fi
+          } > /tmp/release_notes.md
+
+          cat /tmp/release_notes.md
+
+      # ─── Publicação da Release ───────────────────────────────────────────────
+      - name: Create GitHub Release
+        if: |
+          steps.commits.outputs.has_commits == 'true' &&
+          steps.tag_check.outputs.already_exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.next_version.outputs.tag }}
+          name: ${{ steps.next_version.outputs.tag }}
+          body_path: /tmp/release_notes.md
+          files: dist/*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ─── Resumo final ────────────────────────────────────────────────────────
+      - name: Job summary
+        if: always()
+        run: |
+          HAS_COMMITS="${{ steps.commits.outputs.has_commits }}"
+          ALREADY_EXISTS="${{ steps.tag_check.outputs.already_exists }}"
+          NEW_TAG="${{ steps.next_version.outputs.tag }}"
+
+          echo "## Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$HAS_COMMITS" != "true" ]; then
+            echo "ℹ️ Nenhum commit novo detectado. Release não gerada." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$ALREADY_EXISTS" = "true" ]; then
+            echo "⚠️ Tag \`$NEW_TAG\` já existe. Pipeline idempotente encerrado." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ Release \`$NEW_TAG\` publicada com sucesso." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Campo | Valor |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Última tag | \`${{ steps.last_tag.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Nova tag   | \`$NEW_TAG\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Bump type  | \`${{ steps.bump.outputs.type }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          fi
