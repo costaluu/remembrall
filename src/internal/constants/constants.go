@@ -12,6 +12,11 @@ var OS_CONFIGS = map[string]map[string]string{
 		"darwin":  "~/.config/remembrall/config.json",
 		"linux":   "~/.config/remembrall/config.json",
 	},
+	"APP_DB_FILE_NAME": {
+		"windows": "%APPDATA%\\remembrall\\remembrall.db",
+		"darwin":  "~/.config/remembrall/remembrall.db",
+		"linux":   "~/.config/remembrall/remembrall.db",
+	},
 }
 
 var (

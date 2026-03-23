@@ -11,8 +11,8 @@ import (
 	"time"
 
 	spinner "charm.land/huh/v2/spinner"
+	logger "github.com/costaluu/remembrall/src/internal"
 	"github.com/costaluu/remembrall/src/internal/constants"
-	"github.com/costaluu/remembrall/src/logger"
 	"github.com/urfave/cli/v3"
 )
 
