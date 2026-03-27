@@ -183,7 +183,7 @@ jobs:
             ARCH="${PLATFORM##*/}"
             SUFFIX="${TARGETS[$PLATFORM]}"
 
-            OUTPUT="dist/cli-${NEW_TAG}-${SUFFIX}"
+            OUTPUT="dist/remembrall-${NEW_TAG}-${SUFFIX}"
             [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
             echo "Building $OUTPUT..."
@@ -211,7 +211,7 @@ jobs:
             echo "**Tipo de incremento:** \`${BUMP}\`"
             echo ""
 
-            echo "### Commits incluídos"
+            echo "### Commits"
             echo ""
 
             if [ "$IS_FIRST" = "true" ]; then
