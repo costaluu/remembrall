@@ -11,20 +11,31 @@ import (
 )
 
 type Config struct {
-	DateTimeFormat         string
-	DatabaseLocation       string
-	LastestVersion         string
-	LatestVersionCheckTime time.Time
-	NeedsUpdate            bool
+	DateTimeFormat         string    `json:"date_time_format"`
+	DatabaseLocation       string    `json:"database_location"`
+	LastestVersion         string    `json:"latest_version"`
+	LatestVersionCheckTime time.Time `json:"latest_version_check_time"`
+	NeedsUpdate            bool      `json:"needs_update"`
 }
 
 func CreateConfig() {
-	var defaultConfig Config = Config{
-		DateTimeFormat:         "2006-01-02 15:04:05",
-		DatabaseLocation:       constants.OS_CONFIGS["APP_DB_FILE_NAME"][runtime.GOOS],
-		LastestVersion:         "0.0.0",
-		LatestVersionCheckTime: time.Now(),
-		NeedsUpdate:            false,
+	var defaultConfig Config
+
+	switch runtime.GOOS {
+	case "windows":
+		err := filesystem.FileReadJSONFromFile("src/internal/config/default_config_windows.json", &defaultConfig)
+
+		if err != nil {
+			logger.Fatal("Failed to read default config: " + err.Error())
+		}
+	case "darwin", "linux":
+		err := filesystem.FileReadJSONFromFile("src/internal/config/default_config_linux_darwin.json", &defaultConfig)
+
+		if err != nil {
+			logger.Fatal("Failed to read default config: " + err.Error())
+		}
+	default:
+		logger.Fatal("Unsupported OS: " + runtime.GOOS)
 	}
 
 	// Stop daemon from running if config file is missing

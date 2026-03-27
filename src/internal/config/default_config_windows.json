@@ -1,0 +1,7 @@
+{
+    "dete_time_format": "2006-01-02 15:04:05",
+    "database_location": "%APPDATA%\\remembrall\\remembrall.db",
+    "latest_version": "0.0.0",
+    "latest_version_check_time": "2024-06-01T00:00:00Z",
+    "needs_update": false
+}
