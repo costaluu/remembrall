@@ -188,7 +188,7 @@ jobs:
 
             echo "Building $OUTPUT..."
             GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.version=${NEW_TAG}" \
-              -o "$OUTPUT" .
+              -o "$OUTPUT" ./src
           done
 
           ls -lh dist/
