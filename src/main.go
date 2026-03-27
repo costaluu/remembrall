@@ -23,7 +23,10 @@ func main() {
 		},
 		Usage: "remembrall is a terminal-based reminders app",
 		Commands: []*cli.Command{
+			cmd.SetupCommand,
 			cmd.UpdateCommands,
+			cmd.ResetCommand,
+			cmd.ConfigCommands,
 		},
 	}
 

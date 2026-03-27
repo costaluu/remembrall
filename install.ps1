@@ -2,9 +2,9 @@
 $OWNER       = "costaluu"
 $REPO        = "remembrall"
 $INSTALL_DIR = Join-Path $env:APPDATA "remembrall"
-$BIN_DIR     = Join-Path $INSTALL_DIR "bin"
+$BIN_DIR     = Join-Path $LOCALAPPDATA "Programs" "remembrall" "bin"
 $API_URL     = "https://api.github.com/repos/$OWNER/$REPO/releases/latest"
-$RAW_BASE    = "https://raw.githubusercontent.com/$OWNER/$REPO/main"
+$RAW_BASE    = "https://raw.githubusercontent.com/$OWNER/$REPO/master"
 # ──────────────────────────────────────────────────────────────────────────────
 
 $ErrorActionPreference = "Stop"
@@ -85,7 +85,7 @@ function Install-Binary {
 # ── 5. Baixar config padrão ───────────────────────────────────────────────────
 function Install-Config {
   $configFile = Join-Path $INSTALL_DIR "config.json"
-  $configUrl  = "$RAW_BASE/src/inter/config/default_config_windows.json"
+  $configUrl  = "$RAW_BASE/src/internal/config/default_config_windows.json"
 
   if (Test-Path $configFile) {
     Warn "config.json já existe — mantendo o arquivo atual."

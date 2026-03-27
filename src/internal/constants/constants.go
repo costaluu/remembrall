@@ -22,6 +22,11 @@ var OS_CONFIGS = map[string]map[string]string{
 		"darwin":  "~/.config/remembrall/remembrall.db",
 		"linux":   "~/.config/remembrall/remembrall.db",
 	},
+	"APP_BINARY_LOCATION": {
+		"windows": "%LOCALAPPDATA%\\Programs\\remembrall.exe",
+		"darwin":  "/usr/local/bin/remembrall",
+		"linux":   "/usr/local/bin/remembrall",
+	},
 }
 
 var (

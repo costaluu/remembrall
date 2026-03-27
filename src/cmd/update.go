@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -149,6 +153,10 @@ func findAssetURL(release *githubRelease) (string, bool) {
 	return "", false
 }
 
+func selfUpdate(release *githubRelease) {
+
+}
+
 var UpdateApplyCommand *cli.Command = &cli.Command{
 	Name:  "apply",
 	Usage: fmt.Sprintf("apply the latest update to %s.", constants.APP_NAME),
@@ -162,7 +170,137 @@ var UpdateApplyCommand *cli.Command = &cli.Command{
 		}
 
 		if currentConfig.NeedsUpdate {
+			logger.Info("Fetching latest release from GitHub...")
+			release, err := fetchLatestRelease(constants.GITHUB_OWNER, constants.GITHUB_REPO)
 
+			if err != nil {
+				logger.Fatal(err)
+			}
+
+			logger.Fatal("lol")
+
+			runner := func() {
+				assetURL, ok := findAssetURL(release)
+				if !ok {
+					logger.Fatal(fmt.Sprintf("nenhum asset encontrado para %s", assetSuffix()))
+				}
+
+				// ── Resolver caminhos por OS ──────────────────────────────────────────────
+				var binDir, binaryName string
+
+				switch runtime.GOOS {
+				case "linux", "darwin":
+					home, err := os.UserHomeDir()
+					if err != nil {
+						logger.Fatal(fmt.Sprintf("erro ao obter home dir: %w", err))
+					}
+					binDir = filepath.Join(home, ".local", "bin")
+					binaryName = "remembrall"
+
+				case "windows":
+					localAppData := os.Getenv("LOCALAPPDATA")
+					if localAppData == "" {
+						logger.Fatal("variável LOCALAPPDATA não encontrada")
+					}
+					binDir = filepath.Join(localAppData, "Programs", "remembrall")
+					binaryName = "remembrall.exe"
+
+				default:
+					logger.Fatal(fmt.Sprintf("sistema operacional não suportado: %s", runtime.GOOS))
+				}
+
+				currentBin := filepath.Join(binDir, binaryName)
+				oldBin := filepath.Join(binDir, strings.TrimSuffix(binaryName, ".exe")+"-old"+func() string {
+					if runtime.GOOS == "windows" {
+						return ".exe"
+					}
+					return ""
+				}())
+
+				// ── 1. Renomear binário atual para -old ───────────────────────────────────
+				if _, err := os.Stat(currentBin); err == nil {
+					// Remove -old anterior se existir
+					_ = os.Remove(oldBin)
+
+					if err := os.Rename(currentBin, oldBin); err != nil {
+						logger.Fatal(fmt.Sprintf("erro ao renomear binário atual: %w", err))
+					}
+				}
+
+				// ── 2. Baixar novo binário ────────────────────────────────────────────────
+				if err := os.MkdirAll(binDir, 0755); err != nil {
+					logger.Fatal(fmt.Sprintf("erro ao criar diretório %s: %w", binDir, err))
+				}
+
+				transport := &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: 30 * time.Second, // timeout só na conexão TCP
+					}).DialContext,
+					TLSHandshakeTimeout: 10 * time.Second,
+				}
+
+				client := &http.Client{Transport: transport}
+
+				req, err := http.NewRequest(http.MethodGet, assetURL, nil)
+				if err != nil {
+					logger.Fatal(fmt.Sprintf("erro ao criar requisição: %w", err))
+				}
+
+				resp, err := client.Do(req)
+				if err != nil {
+					// Rollback: restaura o binário anterior
+					_ = os.Rename(oldBin, currentBin)
+					logger.Fatal(fmt.Sprintf("erro no download: %w", err))
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusOK {
+					_ = os.Rename(oldBin, currentBin)
+					logger.Fatal(fmt.Sprintf("resposta inesperada no download: %s", resp.Status))
+				}
+
+				// Escreve em arquivo temporário primeiro para evitar binário corrompido
+				tmpFile, err := os.CreateTemp(binDir, "remembrall-update-*")
+				if err != nil {
+					_ = os.Rename(oldBin, currentBin)
+					logger.Fatal(fmt.Sprintf("erro ao criar arquivo temporário: %w", err))
+				}
+				tmpPath := tmpFile.Name()
+
+				_, err = io.Copy(tmpFile, resp.Body)
+				tmpFile.Close()
+				if err != nil {
+					_ = os.Remove(tmpPath)
+					_ = os.Rename(oldBin, currentBin)
+					logger.Fatal(fmt.Sprintf("erro ao salvar binário: %w", err))
+				}
+
+				// ── 3. Tornar executável (unix) e mover para destino final ────────────────
+				if runtime.GOOS != "windows" {
+					if err := os.Chmod(tmpPath, 0755); err != nil {
+						_ = os.Remove(tmpPath)
+						_ = os.Rename(oldBin, currentBin)
+						logger.Fatal(fmt.Sprintf("erro ao definir permissões: %w", err))
+					}
+				}
+
+				if err := os.Rename(tmpPath, currentBin); err != nil {
+					_ = os.Remove(tmpPath)
+					_ = os.Rename(oldBin, currentBin)
+					logger.Fatal(fmt.Sprintf("erro ao mover binário para destino final: %w", err))
+				}
+
+				// TODO: Migrações e outras tarefas
+
+			}
+
+			_ = spinner.New().
+				Title(fmt.Sprintf("updating %s to lastest version...", constants.APP_NAME)).
+				Type(spinner.Dots).
+				Action(runner).
+				Run()
+
+			logger.Success(fmt.Sprintf("%s updated successfully to version %s!", constants.APP_NAME, currentConfig.LatestVersion))
 		}
 
 		return nil
@@ -191,7 +329,7 @@ func UpdateCheckCommandAction(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		// ── 2. Busca a última release no GitHub ──────────────────────────────
-		fmt.Println("Fetching latest release from GitHub...")
+		logger.Info("Fetching latest release from GitHub...")
 		release, err := fetchLatestRelease(constants.GITHUB_OWNER, constants.GITHUB_REPO)
 		if err != nil {
 			logger.Fatal(err)
@@ -211,7 +349,7 @@ func UpdateCheckCommandAction(ctx context.Context, cmd *cli.Command) error {
 		// ── 5. Nova versão disponível ─────────────────────────────────────────
 		logger.Info(fmt.Sprintf("A new version is avaliable: %s → %s\n", currentRaw, release.TagName))
 
-		currentConfig.LastestVersion = release.TagName
+		currentConfig.LatestVersion = release.TagName
 		currentConfig.LatestVersionCheckTime = time.Now()
 
 		if !isNewer(current, latest) {
@@ -229,9 +367,9 @@ func UpdateCheckCommandAction(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if currentConfig.LatestVersionCheckTime.Add(12 * time.Hour).After(time.Now()) {
-		logger.Info(fmt.Sprintf("Last checked for updates at %s\n", currentConfig.LatestVersionCheckTime.Format(currentConfig.DateTimeFormat)))
-		logger.Info(fmt.Sprintf("Latest version: %s\n", currentConfig.LastestVersion))
-		logger.Info("Checked for updates less than 12 hours ago, skipping check.\n")
+		logger.Info(fmt.Sprintf("Last checked for updates at %s", currentConfig.LatestVersionCheckTime.Format(currentConfig.DateTimeFormat)))
+		logger.Info(fmt.Sprintf("Latest version: %s", currentConfig.LatestVersion))
+		logger.Info("Checked for updates less than 12 hours ago, skipping check.")
 		return nil
 	}
 
@@ -240,15 +378,6 @@ func UpdateCheckCommandAction(ctx context.Context, cmd *cli.Command) error {
 		Type(spinner.Dots).
 		Action(runner).
 		Run()
-
-	// downloadURL, found := findAssetURL(release)
-
-	// if found {
-	// 	logger.Info(fmt.Sprintf("  Download: %s\n", downloadURL))
-	// } else {
-	// 	logger.Info(fmt.Sprintf("  Release page: %s\n", release.HTMLURL))
-	// 	logger.Info(fmt.Sprintf("  (no prebuilt binary found for %s/%s)\n", runtime.GOOS, runtime.GOARCH))
-	// }
 
 	return nil
 }
@@ -262,5 +391,5 @@ var UpdateCheckCommand *cli.Command = &cli.Command{
 var UpdateCommands *cli.Command = &cli.Command{
 	Name:     "update",
 	Usage:    fmt.Sprintf("command to check and apply updates to %s.", constants.APP_NAME),
-	Commands: []*cli.Command{UpdateCheckCommand},
+	Commands: []*cli.Command{UpdateCheckCommand, UpdateApplyCommand},
 }

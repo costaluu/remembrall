@@ -1,7 +1,11 @@
 package config
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -10,37 +14,78 @@ import (
 	"github.com/costaluu/remembrall/src/internal/logger"
 )
 
+//go:embed default_config_linux_darwin.json
+var defaultConfigLinuxDarwin []byte
+
+//go:embed default_config_windows.json
+var defaultConfigWindows []byte
+
 type Config struct {
 	DateTimeFormat         string    `json:"date_time_format"`
 	DatabaseLocation       string    `json:"database_location"`
-	LastestVersion         string    `json:"latest_version"`
+	LatestVersion          string    `json:"latest_version"`
 	LatestVersionCheckTime time.Time `json:"latest_version_check_time"`
 	NeedsUpdate            bool      `json:"needs_update"`
 }
 
-func CreateConfig() {
+func GetDefaultConfig() Config {
 	var defaultConfig Config
 
 	switch runtime.GOOS {
-	case "windows":
-		err := filesystem.FileReadJSONFromFile("src/internal/config/default_config_windows.json", &defaultConfig)
+	case "linux", "darwin":
+		err := json.Unmarshal(defaultConfigLinuxDarwin, &defaultConfig)
 
 		if err != nil {
 			logger.Fatal("Failed to read default config: " + err.Error())
 		}
-	case "darwin", "linux":
-		err := filesystem.FileReadJSONFromFile("src/internal/config/default_config_linux_darwin.json", &defaultConfig)
+	case "windows":
+		err := json.Unmarshal(defaultConfigWindows, &defaultConfig)
 
 		if err != nil {
 			logger.Fatal("Failed to read default config: " + err.Error())
 		}
 	default:
-		logger.Fatal("Unsupported OS: " + runtime.GOOS)
+		logger.Fatal("Unsupported operating system: " + runtime.GOOS)
 	}
+
+	return defaultConfig
+}
+
+func GetConfigPathBase() (string, error) {
+	configDir, err := os.UserConfigDir()
+
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(configDir, "remembrall"), nil
+}
+
+func getConfigPath() (string, error) {
+	configDir, err := os.UserConfigDir()
+
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(configDir, "remembrall", "config.json"), nil
+}
+
+func CreateConfig() {
+	var configPath string
+	var err error
+
+	if configPath, err = getConfigPath(); err != nil {
+		logger.Fatal("Failed to get config path: " + err.Error())
+	}
+
+	var defaultConfig Config
+
+	err = filesystem.FileReadJSONFromFile(configPath, &defaultConfig)
 
 	// Stop daemon from running if config file is missing
 
-	err := filesystem.FileDeleteFolder(constants.OS_CONFIGS["APP_DIR"][runtime.GOOS])
+	err = filesystem.FileDeleteFolder(constants.OS_CONFIGS["APP_DIR"][runtime.GOOS])
 
 	if err != nil {
 		logger.Fatal("Failed to delete config directory: " + err.Error())
@@ -60,19 +105,33 @@ func CreateConfig() {
 }
 
 func LoadConfig() (Config, error) {
+	var configPath string
+	var err error
+
+	if configPath, err = getConfigPath(); err != nil {
+		logger.Fatal("Failed to get config path: " + err.Error())
+	}
+
 	var config Config
 
-	err := filesystem.FileReadJSONFromFile(constants.OS_CONFIGS["APP_CONFIG_FILE_NAME"][runtime.GOOS], &config)
+	err = filesystem.FileReadJSONFromFile(configPath, &config)
 
 	if err != nil {
-		return Config{}, fmt.Errorf("failed to read config file: %w", err)
+		return Config{}, fmt.Errorf("failed to read default config: %w", err)
 	}
 
 	return config, nil
 }
 
 func SaveConfig(config Config) error {
-	err := filesystem.FileWriteJSONToFile(constants.OS_CONFIGS["APP_CONFIG_FILE_NAME"][runtime.GOOS], config)
+	var configPath string
+	var err error
+
+	if configPath, err = getConfigPath(); err != nil {
+		logger.Fatal("Failed to get config path: " + err.Error())
+	}
+
+	err = filesystem.FileWriteJSONToFile(configPath, config)
 
 	if err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)

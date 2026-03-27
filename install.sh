@@ -4,10 +4,9 @@ set -euo pipefail
 # ─── Configuração ─────────────────────────────────────────────────────────────
 OWNER="costaluu"
 REPO="remembrall"
-INSTALL_DIR="$HOME/.config/remembrall"
-BIN_DIR="$INSTALL_DIR/bin"
-CONFIG_DIR="$INSTALL_DIR"
-RAW_BASE="https://raw.githubusercontent.com/$OWNER/$REPO/main"
+BIN_DIR="$HOME/.local/bin"
+CONFIG_DIR="$HOME/.config/remembrall"
+RAW_BASE="https://raw.githubusercontent.com/$OWNER/$REPO/master"
 API_URL="https://api.github.com/repos/$OWNER/$REPO/releases/latest"
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -69,8 +68,8 @@ fetch_asset_url() {
 
 # ── 3. Criar estrutura de diretórios ──────────────────────────────────────────
 create_dirs() {
-  log "Criando estrutura em $INSTALL_DIR..."
-  mkdir -p "$BIN_DIR"
+  log "Criando estrutura em $CONFIG_DIR..."
+  mkdir -p "$CONFIG_DIR"
   success "Diretórios prontos."
 }
 
@@ -87,7 +86,7 @@ install_binary() {
 # ── 5. Baixar config padrão ───────────────────────────────────────────────────
 install_config() {
   CONFIG_FILE="$CONFIG_DIR/config.json"
-  CONFIG_URL="$RAW_BASE/src/inter/config/default_config_linux_darwin.json"
+  CONFIG_URL="$RAW_BASE/src/internal/config/default_config_linux_darwin.json"
 
   if [ -f "$CONFIG_FILE" ]; then
     warn "config.json já existe — mantendo o arquivo atual."

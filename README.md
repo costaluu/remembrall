@@ -3,11 +3,11 @@
 Linux/Mac:
 
 ```powershell
-curl -fsSL https://raw.githubusercontent.com/costaluu/remembrall/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/costaluu/remembrall/master/install.sh | bash
 ```
 
 Windows:
 
 ```powershell
-irm https://raw.githubusercontent.com/costaluu/remembrall/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/costaluu/remembrall/master/install.ps1 | iex
 ```
