@@ -153,10 +153,6 @@ func findAssetURL(release *githubRelease) (string, bool) {
 	return "", false
 }
 
-func selfUpdate(release *githubRelease) {
-
-}
-
 var UpdateApplyCommand *cli.Command = &cli.Command{
 	Name:  "apply",
 	Usage: fmt.Sprintf("apply the latest update to %s.", constants.APP_NAME),

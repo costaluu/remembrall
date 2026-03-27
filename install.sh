@@ -43,8 +43,8 @@ detect_platform() {
   log "Plataforma detectada: $OS/$ARCH"
 }
 
-# ── 2. Buscar URL do asset na última release ──────────────────────────────────
-fetch_asset_url() {
+# ── 2. Buscar URL dos assets na última release ────────────────────────────────
+fetch_asset_urls() {
   log "Consultando última release em $OWNER/$REPO..."
 
   RELEASE_JSON="$(curl -fsSL \
@@ -56,34 +56,59 @@ fetch_asset_url() {
   [ -n "$TAG" ] || die "Não foi possível determinar a tag da release."
   log "Última versão: $TAG"
 
+  # Asset do CLI principal (remembrall-*)
   ASSET_URL="$(echo "$RELEASE_JSON" \
     | grep '"browser_download_url"' \
+    | grep "remembrall-" \
+    | grep "$ASSET_SUFFIX" \
+    | grep -v "remembralld-" \
+    | head -1 \
+    | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/')"
+
+  [ -n "$ASSET_URL" ] || die "Nenhum asset do CLI encontrado para $ASSET_SUFFIX na release $TAG."
+  log "CLI encontrado: $(basename "$ASSET_URL")"
+
+  # Asset do daemon (remembralld-*)
+  DAEMON_URL="$(echo "$RELEASE_JSON" \
+    | grep '"browser_download_url"' \
+    | grep "remembralld-" \
     | grep "$ASSET_SUFFIX" \
     | head -1 \
     | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/')"
 
-  [ -n "$ASSET_URL" ] || die "Nenhum asset encontrado para $ASSET_SUFFIX na release $TAG."
-  log "Asset encontrado: $(basename "$ASSET_URL")"
+  [ -n "$DAEMON_URL" ] || die "Nenhum asset do daemon encontrado para $ASSET_SUFFIX na release $TAG."
+  log "Daemon encontrado: $(basename "$DAEMON_URL")"
 }
 
 # ── 3. Criar estrutura de diretórios ──────────────────────────────────────────
 create_dirs() {
   log "Criando estrutura em $CONFIG_DIR..."
   mkdir -p "$CONFIG_DIR"
+  mkdir -p "$BIN_DIR"
   success "Diretórios prontos."
 }
 
-# ── 4. Baixar e instalar o binário ────────────────────────────────────────────
+# ── 4. Baixar e instalar o binário CLI ────────────────────────────────────────
 install_binary() {
   BINARY_PATH="$BIN_DIR/remembrall"
 
-  log "Baixando binário..."
-  curl -fsSL "$ASSET_URL" -o "$BINARY_PATH" || die "Falha no download do binário."
+  log "Baixando CLI..."
+  curl -fsSL "$ASSET_URL" -o "$BINARY_PATH" || die "Falha no download do CLI."
   chmod +x "$BINARY_PATH"
-  success "Binário instalado em $BINARY_PATH."
+  success "CLI instalado em $BINARY_PATH."
 }
 
-# ── 5. Baixar config padrão ───────────────────────────────────────────────────
+# ── 5. Baixar e instalar o daemon ─────────────────────────────────────────────
+install_daemon() {
+  DAEMON_PATH="$BIN_DIR/remembralld"
+
+  log "Baixando daemon..."
+  curl -fsSL "$DAEMON_URL" -o "$DAEMON_PATH" || die "Falha no download do daemon."
+  chmod +x "$DAEMON_PATH"
+  success "Daemon instalado em $DAEMON_PATH."
+}
+
+# ── 6. Baixar config padrão ───────────────────────────────────────────────────
 install_config() {
   CONFIG_FILE="$CONFIG_DIR/config.json"
   CONFIG_URL="$RAW_BASE/src/internal/config/default_config_linux_darwin.json"
@@ -98,11 +123,10 @@ install_config() {
   success "config.json criado em $CONFIG_FILE."
 }
 
-# ── 6. Atualizar PATH ─────────────────────────────────────────────────────────
+# ── 7. Atualizar PATH ─────────────────────────────────────────────────────────
 update_path() {
   EXPORT_LINE="export PATH=\"$BIN_DIR:\$PATH\""
 
-  # Detectar shell rc
   SHELL_NAME="$(basename "${SHELL:-bash}")"
   case "$SHELL_NAME" in
     zsh)  RC_FILE="$HOME/.zshrc" ;;
@@ -134,9 +158,10 @@ main() {
   echo ""
 
   detect_platform
-  fetch_asset_url
+  fetch_asset_urls
   create_dirs
   install_binary
+  install_daemon
   install_config
   RC_UPDATED=false
   update_path
@@ -155,7 +180,7 @@ main() {
 
   echo -e "  Depois é só rodar:"
   echo ""
-  echo -e "    ${CYAN}remembrall setup${RESET}  ou  ${CYAN}rem setup${RESET}"
+  echo -e "    ${CYAN}remembrall setup${RESET}"
   echo ""
 }
 
