@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/costaluu/remembrall/src/internal/logger"
+	"github.com/costaluu/remembrall/src/cli/internal/logger"
 )
 
 var fileMutex sync.Mutex = sync.Mutex{}

@@ -6,7 +6,7 @@ import (
 	"runtime/debug"
 
 	"charm.land/lipgloss/v2"
-	"github.com/costaluu/remembrall/src/internal/styles"
+	"github.com/costaluu/remembrall/src/cli/internal/styles"
 )
 
 var infoStyle = lipgloss.

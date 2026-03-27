@@ -8,10 +8,10 @@ import (
 	"runtime"
 
 	"charm.land/huh/v2"
-	"github.com/costaluu/remembrall/src/internal/config"
-	"github.com/costaluu/remembrall/src/internal/constants"
-	"github.com/costaluu/remembrall/src/internal/filesystem"
-	"github.com/costaluu/remembrall/src/internal/logger"
+	"github.com/costaluu/remembrall/src/cli/internal/config"
+	"github.com/costaluu/remembrall/src/cli/internal/constants"
+	"github.com/costaluu/remembrall/src/cli/internal/filesystem"
+	"github.com/costaluu/remembrall/src/cli/internal/logger"
 	"github.com/urfave/cli/v3"
 )
 

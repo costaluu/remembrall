@@ -186,9 +186,13 @@ jobs:
             OUTPUT="dist/remembrall-${NEW_TAG}-${SUFFIX}"
             [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
-            echo "Building $OUTPUT..."
+            echo "Building CLI binaries $OUTPUT..."
             GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
-              -o "$OUTPUT" ./src
+              -o "$OUTPUT" ./src/cli
+
+            echo "Building DAEMON binaries $OUTPUT..."
+            GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
+              -o "$OUTPUT" ./src/daemon
           done
 
           ls -lh dist/

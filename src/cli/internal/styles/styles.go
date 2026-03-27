@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"charm.land/lipgloss/v2"
-	"github.com/costaluu/remembrall/src/internal/constants"
+	"github.com/costaluu/remembrall/src/cli/internal/constants"
 )
 
 func AccentTextNoUnderline(message string) string {

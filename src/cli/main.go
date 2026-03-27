@@ -6,9 +6,8 @@ import (
 	"net/mail"
 	"os"
 
-	"github.com/costaluu/remembrall/src/cmd"
-	"github.com/costaluu/remembrall/src/internal/constants"
-
+	"github.com/costaluu/remembrall/src/cli/cmd"
+	"github.com/costaluu/remembrall/src/cli/internal/constants"
 	"github.com/urfave/cli/v3"
 )
 

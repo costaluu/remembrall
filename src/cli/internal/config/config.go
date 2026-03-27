@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/costaluu/remembrall/src/internal/constants"
-	"github.com/costaluu/remembrall/src/internal/filesystem"
-	"github.com/costaluu/remembrall/src/internal/logger"
+	"github.com/costaluu/remembrall/src/cli/internal/constants"
+	"github.com/costaluu/remembrall/src/cli/internal/filesystem"
+	"github.com/costaluu/remembrall/src/cli/internal/logger"
 )
 
 //go:embed default_config_linux_darwin.json
