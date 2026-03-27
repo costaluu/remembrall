@@ -190,6 +190,9 @@ jobs:
             GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
               -o "$OUTPUT" ./src/cli
 
+            OUTPUT="dist/remembralld-${NEW_TAG}-${SUFFIX}"
+            [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
+
             echo "Building DAEMON binaries $OUTPUT..."
             GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
               -o "$OUTPUT" ./src/daemon
