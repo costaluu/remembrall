@@ -187,7 +187,7 @@ jobs:
             [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
             echo "Building $OUTPUT..."
-            GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.version=${NEW_TAG}" \
+            GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
               -o "$OUTPUT" ./src
           done
 

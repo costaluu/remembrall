@@ -177,8 +177,6 @@ var UpdateApplyCommand *cli.Command = &cli.Command{
 				logger.Fatal(err)
 			}
 
-			logger.Fatal("lol")
-
 			runner := func() {
 				assetURL, ok := findAssetURL(release)
 				if !ok {
