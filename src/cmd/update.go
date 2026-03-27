@@ -11,6 +11,7 @@ import (
 	"time"
 
 	spinner "charm.land/huh/v2/spinner"
+	"github.com/costaluu/remembrall/src/internal/config"
 	"github.com/costaluu/remembrall/src/internal/constants"
 	"github.com/costaluu/remembrall/src/internal/logger"
 	"github.com/urfave/cli/v3"
@@ -148,63 +149,114 @@ func findAssetURL(release *githubRelease) (string, bool) {
 	return "", false
 }
 
-var UpdateCheckCommand *cli.Command = &cli.Command{
-	Name:  "check",
-	Usage: fmt.Sprintf("check for updates to %s.", constants.APP_NAME),
+var UpdateApplyCommand *cli.Command = &cli.Command{
+	Name:  "apply",
+	Usage: fmt.Sprintf("apply the latest update to %s.", constants.APP_NAME),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		currentRaw := cmd.Root().Version
+		UpdateCheckCommandAction(ctx, cmd)
 
-		if currentRaw == "dev" {
-			currentRaw = "0.0.0" // fallback para desenvolvimento local
+		currentConfig, err := config.LoadConfig()
+
+		if err != nil {
+			logger.Fatal("Failed to load config: " + err.Error())
 		}
 
-		runner := func() {
-			// ── 1. Parse da versão atual ─────────────────────────────────────────
-			current, err := parseSemver(currentRaw)
+		if currentConfig.NeedsUpdate {
 
-			if err != nil {
-				logger.Fatal(err)
-			}
-
-			// ── 2. Busca a última release no GitHub ──────────────────────────────
-			fmt.Println("Fetching latest release from GitHub...")
-			release, err := fetchLatestRelease(constants.GITHUB_OWNER, constants.GITHUB_REPO)
-			if err != nil {
-				logger.Fatal(err)
-			}
-
-			// ── 3. Parse da versão remota ────────────────────────────────────────
-			latest, err := parseSemver(release.TagName)
-			if err != nil {
-				logger.Fatal(err)
-			}
-
-			// ── 4. Comparação semântica ──────────────────────────────────────────
-			if !isNewer(current, latest) {
-				logger.Success(fmt.Sprintf("%s is up to date (version %s).\n", constants.APP_NAME, currentRaw))
-			}
-
-			// ── 5. Nova versão disponível ─────────────────────────────────────────
-			logger.Info(fmt.Sprintf("A new version is avaliable: %s → %s\n", currentRaw, release.TagName))
 		}
-
-		_ = spinner.New().
-			Title("looking for updates...").
-			Type(spinner.Dots).
-			Action(runner).
-			Run()
-
-		// downloadURL, found := findAssetURL(release)
-
-		// if found {
-		// 	logger.Info(fmt.Sprintf("  Download: %s\n", downloadURL))
-		// } else {
-		// 	logger.Info(fmt.Sprintf("  Release page: %s\n", release.HTMLURL))
-		// 	logger.Info(fmt.Sprintf("  (no prebuilt binary found for %s/%s)\n", runtime.GOOS, runtime.GOARCH))
-		// }
 
 		return nil
 	},
+}
+
+func UpdateCheckCommandAction(ctx context.Context, cmd *cli.Command) error {
+	currentRaw := cmd.Root().Version
+
+	if currentRaw == "dev" {
+		currentRaw = "0.0.0" // fallback para desenvolvimento local
+	}
+
+	currentConfig, err := config.LoadConfig()
+
+	if err != nil {
+		logger.Fatal("Failed to load config: " + err.Error())
+	}
+
+	runner := func() {
+		// ── 1. Parse da versão atual ─────────────────────────────────────────
+		current, err := parseSemver(currentRaw)
+
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		// ── 2. Busca a última release no GitHub ──────────────────────────────
+		fmt.Println("Fetching latest release from GitHub...")
+		release, err := fetchLatestRelease(constants.GITHUB_OWNER, constants.GITHUB_REPO)
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		// ── 3. Parse da versão remota ────────────────────────────────────────
+		latest, err := parseSemver(release.TagName)
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		// ── 4. Comparação semântica ──────────────────────────────────────────
+		if !isNewer(current, latest) {
+			logger.Success(fmt.Sprintf("your %s is up to date.\n", constants.APP_NAME))
+		}
+
+		// ── 5. Nova versão disponível ─────────────────────────────────────────
+		logger.Info(fmt.Sprintf("A new version is avaliable: %s → %s\n", currentRaw, release.TagName))
+
+		currentConfig.LastestVersion = release.TagName
+		currentConfig.LatestVersionCheckTime = time.Now()
+
+		if !isNewer(current, latest) {
+			currentConfig.NeedsUpdate = false
+		} else {
+			currentConfig.NeedsUpdate = true
+		}
+
+		err = config.SaveConfig(currentConfig)
+
+		if err != nil {
+			logger.Fatal("Failed to save config: " + err.Error())
+			return
+		}
+	}
+
+	if currentConfig.LatestVersionCheckTime.Add(12 * time.Hour).After(time.Now()) {
+		logger.Info(fmt.Sprintf("Last checked for updates at %s\n", currentConfig.LatestVersionCheckTime.Format(currentConfig.DateTimeFormat)))
+		logger.Info(fmt.Sprintf("Latest version: %s\n", currentConfig.LastestVersion))
+		logger.Info("Checked for updates less than 12 hours ago, skipping check.\n")
+		return nil
+	}
+
+	_ = spinner.New().
+		Title("looking for updates...").
+		Type(spinner.Dots).
+		Action(runner).
+		Run()
+
+	// downloadURL, found := findAssetURL(release)
+
+	// if found {
+	// 	logger.Info(fmt.Sprintf("  Download: %s\n", downloadURL))
+	// } else {
+	// 	logger.Info(fmt.Sprintf("  Release page: %s\n", release.HTMLURL))
+	// 	logger.Info(fmt.Sprintf("  (no prebuilt binary found for %s/%s)\n", runtime.GOOS, runtime.GOARCH))
+	// }
+
+	return nil
+}
+
+var UpdateCheckCommand *cli.Command = &cli.Command{
+	Name:   "check",
+	Usage:  fmt.Sprintf("check for updates to %s.", constants.APP_NAME),
+	Action: UpdateCheckCommandAction,
 }
 
 var UpdateCommands *cli.Command = &cli.Command{
