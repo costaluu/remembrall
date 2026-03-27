@@ -111,7 +111,7 @@ install_daemon() {
 # ── 6. Baixar config padrão ───────────────────────────────────────────────────
 install_config() {
   CONFIG_FILE="$CONFIG_DIR/config.json"
-  CONFIG_URL="$RAW_BASE/src/internal/config/default_config_linux_darwin.json"
+  CONFIG_URL="$RAW_BASE/src/cli/internal/config/default_config_linux_darwin.json"
 
   if [ -f "$CONFIG_FILE" ]; then
     warn "config.json já existe — mantendo o arquivo atual."
