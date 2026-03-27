@@ -162,36 +162,36 @@ jobs:
         with:
           go-version: stable
 
-        - name: Build binaries
-          if: |
-            steps.commits.outputs.has_commits == 'true' &&
-            steps.tag_check.outputs.already_exists == 'false'
-          run: |
-            NEW_TAG="${{ steps.next_version.outputs.tag }}"
-            mkdir -p dist
+      - name: Build binaries
+        if: |
+          steps.commits.outputs.has_commits == 'true' &&
+          steps.tag_check.outputs.already_exists == 'false'
+        run: |
+          NEW_TAG="${{ steps.next_version.outputs.tag }}"
+          mkdir -p dist
 
-            declare -A TARGETS=(
-              ["linux/amd64"]="linux-amd64"
-              ["linux/arm64"]="linux-arm64"
-              ["darwin/amd64"]="darwin-amd64"
-              ["darwin/arm64"]="darwin-arm64"
-              ["windows/amd64"]="windows-amd64"
-            )
+          declare -A TARGETS=(
+            ["linux/amd64"]="linux-amd64"
+            ["linux/arm64"]="linux-arm64"
+            ["darwin/amd64"]="darwin-amd64"
+            ["darwin/arm64"]="darwin-arm64"
+            ["windows/amd64"]="windows-amd64"
+          )
 
-            for PLATFORM in "${!TARGETS[@]}"; do
-              OS="${PLATFORM%%/*}"
-              ARCH="${PLATFORM##*/}"
-              SUFFIX="${TARGETS[$PLATFORM]}"
+          for PLATFORM in "${!TARGETS[@]}"; do
+            OS="${PLATFORM%%/*}"
+            ARCH="${PLATFORM##*/}"
+            SUFFIX="${TARGETS[$PLATFORM]}"
 
-              OUTPUT="dist/cli-${NEW_TAG}-${SUFFIX}"
-              [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
+            OUTPUT="dist/cli-${NEW_TAG}-${SUFFIX}"
+            [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
-              echo "Building $OUTPUT..."
-              GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.version=${NEW_TAG}" \
-                -o "$OUTPUT" .
-            done
+            echo "Building $OUTPUT..."
+            GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.version=${NEW_TAG}" \
+              -o "$OUTPUT" .
+          done
 
-            ls -lh dist/
+          ls -lh dist/
 
       # ─── Geração do Changelog ────────────────────────────────────────────────
       - name: Generate release notes
