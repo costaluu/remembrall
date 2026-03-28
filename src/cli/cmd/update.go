@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -154,10 +155,16 @@ func FindAssetURLs(release *githubRelease) (string, string, bool) {
 
 		base := strings.TrimSuffix(asset.Name, "-"+suffix)
 
-		switch base {
-		case "remembrall":
+		regexRemembrall := regexp.MustCompile(`^remembrall-v\d+\.\d+\.\d+$`)
+		regexRemembralld := regexp.MustCompile(`^remembralld-v\d+\.\d+\.\d+$`)
+
+		if !regexRemembrall.MatchString(base) && !regexRemembralld.MatchString(base) {
+			continue
+		}
+
+		if regexRemembrall.MatchString(base) {
 			remembrallURL = asset.BrowserDownloadURL
-		case "remembralld":
+		} else if regexRemembralld.MatchString(base) {
 			remembralldURL = asset.BrowserDownloadURL
 		}
 

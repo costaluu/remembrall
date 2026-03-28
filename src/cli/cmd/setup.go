@@ -11,6 +11,8 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"syscall"
 	"time"
 
 	"charm.land/huh/v2"
@@ -66,6 +68,71 @@ func pathsAlreadyInPATH() bool {
 	return true
 }
 
+func isProcessRunning(processName string) bool {
+	isRunningLinux := func(name string) bool {
+		out, err := exec.Command("pgrep", "-f", name).Output()
+		return err == nil && len(out) > 0
+	}
+
+	isRunningWindows := func(name string) bool {
+		out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", name)).Output()
+		return err == nil && strings.Contains(string(out), name)
+	}
+
+	switch runtime.GOOS {
+	case "linux", "darwin":
+		return isRunningLinux(processName)
+	case "windows":
+		return isRunningWindows(processName)
+	default:
+		return false
+	}
+}
+
+func startDaemon() error {
+	logger.Info("starting daemon...")
+
+	if runtime.GOOS != "windows" {
+		homeDir, err := os.UserHomeDir()
+
+		if err != nil {
+			logger.Fatal("failed to get user config directory: " + err.Error())
+		}
+
+		exePath := filepath.Join(homeDir, constants.OS_CONFIGS["APP_DAEMON_LOCATION"][runtime.GOOS])
+
+		cmd := exec.Command(exePath)
+
+		devNull, _ := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+		cmd.Stdout = devNull
+		cmd.Stderr = devNull
+		cmd.Stdin = nil
+
+		// Configuração importante para rodar como daemon em background
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setsid: true, // Cria nova sessão (o mais importante para detach)
+			// Foreground: false,  // não use isso para background
+		}
+
+		if err := cmd.Start(); err != nil {
+			logger.Fatal(fmt.Sprintf("falha ao iniciar daemon %s: %w", exePath, err))
+		}
+	} else {
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData == "" {
+			logger.Fatal("LOCALAPPDATA environment variable is not set")
+		}
+
+		err := exec.Command(filepath.Join(localAppData, "Programs", "remembralld.exe")).Start()
+
+		if err != nil {
+			logger.Fatal(fmt.Sprintf("failed to start daemon: %w", err))
+		}
+	}
+
+	return nil
+}
+
 var SetupCommand *cli.Command = &cli.Command{
 	Name:  "setup",
 	Usage: "setup the application",
@@ -90,6 +157,8 @@ var SetupCommand *cli.Command = &cli.Command{
 			filesystem.FileCreateFolder(path.Join(configPathBase))
 		}
 
+		logger.Info("checking config path file...")
+
 		configFileExists := filesystem.FileExists(path.Join(configPathBase, "config.json"))
 
 		if !configFileExists {
@@ -98,15 +167,19 @@ var SetupCommand *cli.Command = &cli.Command{
 			config.CreateConfig()
 		}
 
-		configDir, err := os.UserConfigDir()
+		configDir, err := os.UserHomeDir()
 
 		if err != nil {
 			logger.Fatal("failed to get user config directory: " + err.Error())
 		}
 
+		logger.Info("checking daemon binary...")
+
 		daemonExists := filesystem.FileExists(path.Join(configDir, constants.OS_CONFIGS["APP_DAEMON_LOCATION"][runtime.GOOS]))
 
 		if !daemonExists {
+			logger.Warning("daemon binary not found!")
+
 			release, err := fetchLatestRelease(constants.GITHUB_OWNER, constants.GITHUB_REPO)
 
 			if err != nil {
@@ -179,25 +252,20 @@ var SetupCommand *cli.Command = &cli.Command{
 
 			// Executar daemon
 
-			logger.Info("starting daemon...")
+			startDaemon()
 
-			if runtime.GOOS != "windows" {
-				err = exec.Command("./.local/bin/remembralld").Start()
+			logger.Success("daemon started successfully!")
+		}
 
-				if err != nil {
-					logger.Fatal(fmt.Sprintf("failed to start daemon: %w", err))
-				}
-			} else {
-				localAppData := os.Getenv("LOCALAPPDATA")
-				if localAppData == "" {
-					logger.Fatal("LOCALAPPDATA environment variable is not set")
-				}
+		logger.Info("checking if daemon is running...")
 
-				err = exec.Command(filepath.Join(localAppData, "Programs", "remembralld.exe")).Start()
+		if !isProcessRunning("remembralld") {
+			logger.Warning("daemon is not running!")
 
-				if err != nil {
-					logger.Fatal(fmt.Sprintf("failed to start daemon: %w", err))
-				}
+			err := startDaemon()
+
+			if err != nil {
+				logger.Fatal("failed to start daemon: " + err.Error())
 			}
 
 			logger.Success("daemon started successfully!")

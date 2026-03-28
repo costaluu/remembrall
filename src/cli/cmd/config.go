@@ -69,7 +69,7 @@ func SetDatabaseLocationCommandAction(ctx context.Context, cmd *cli.Command) err
 	}
 
 	var newLocation string
-	var oldLocation string
+	var oldLocation string = currentConfig.DatabaseLocation
 
 	if currentConfig.DatabaseLocation == "" {
 		defaultConfig := config.GetDefaultConfig()
@@ -77,7 +77,7 @@ func SetDatabaseLocationCommandAction(ctx context.Context, cmd *cli.Command) err
 	}
 
 	huh.NewInput().
-		Title("What's the new database location?").
+		Title("Where's your database ?").
 		Prompt("?").
 		Placeholder(oldLocation).
 		Value(&newLocation).
