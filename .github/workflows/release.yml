@@ -160,7 +160,7 @@ jobs:
           steps.tag_check.outputs.already_exists == 'false'
         uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version: 1.x
 
       - name: Build binaries
         if: |
@@ -183,18 +183,21 @@ jobs:
             ARCH="${PLATFORM##*/}"
             SUFFIX="${TARGETS[$PLATFORM]}"
 
+            CGO="0"
+            [ "$OS" = "windows" ] && CGO="1"
+
             OUTPUT="dist/remembrall-${NEW_TAG}-${SUFFIX}"
             [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
             echo "Building CLI binaries $OUTPUT..."
-            GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
+            GOOS="$OS" GOARCH="$ARCH" CGO_ENABLED="$CGO" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
               -o "$OUTPUT" ./src/cli
 
             OUTPUT="dist/remembralld-${NEW_TAG}-${SUFFIX}"
             [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
             echo "Building DAEMON binaries $OUTPUT..."
-            GOOS="$OS" GOARCH="$ARCH" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
+            GOOS="$OS" GOARCH="$ARCH" CGO_ENABLED="$CGO" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
               -o "$OUTPUT" ./src/daemon
           done
 
