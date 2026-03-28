@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"charm.land/huh/v2"
@@ -107,12 +106,6 @@ func startDaemon() error {
 		cmd.Stdout = devNull
 		cmd.Stderr = devNull
 		cmd.Stdin = nil
-
-		// Configuração importante para rodar como daemon em background
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setsid: true, // Cria nova sessão (o mais importante para detach)
-			// Foreground: false,  // não use isso para background
-		}
 
 		if err := cmd.Start(); err != nil {
 			logger.Fatal(fmt.Sprintf("falha ao iniciar daemon %s: %w", exePath, err))
