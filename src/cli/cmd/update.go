@@ -140,17 +140,98 @@ func assetSuffix() string {
 	return suffix
 }
 
-// findAssetURL procura entre os assets da release o binário para o OS/ARCH
-// atual e retorna sua URL de download.
-func findAssetURL(release *githubRelease) (string, bool) {
+// findAssetURLs procura entre os assets da release os binários remembrall e remembralld
+// para o OS/ARCH atual e retorna suas URLs de download.
+func FindAssetURLs(release *githubRelease) (string, string, bool) {
 	suffix := assetSuffix()
 
+	var remembrallURL, remembralldURL string
+
 	for _, asset := range release.Assets {
-		if strings.HasSuffix(asset.Name, suffix) {
-			return asset.BrowserDownloadURL, true
+		if !strings.HasSuffix(asset.Name, suffix) {
+			continue
+		}
+
+		base := strings.TrimSuffix(asset.Name, "-"+suffix)
+
+		switch base {
+		case "remembrall":
+			remembrallURL = asset.BrowserDownloadURL
+		case "remembralld":
+			remembralldURL = asset.BrowserDownloadURL
+		}
+
+		if remembrallURL != "" && remembralldURL != "" {
+			break
 		}
 	}
-	return "", false
+
+	if remembrallURL == "" || remembralldURL == "" {
+		return "", "", false
+	}
+
+	return remembrallURL, remembralldURL, true
+}
+
+func DownloadAndReplaceBinary(assetURL, binDir, currentBin, oldBin string) error {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 30 * time.Second, // timeout só na conexão TCP
+		}).DialContext,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	client := &http.Client{Transport: transport}
+
+	req, err := http.NewRequest(http.MethodGet, assetURL, nil)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("erro ao criar requisição: %w", err))
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Rollback: restaura o binário anterior
+		_ = os.Rename(oldBin, currentBin)
+		logger.Fatal(fmt.Sprintf("erro no download: %w", err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		_ = os.Rename(oldBin, currentBin)
+		logger.Fatal(fmt.Sprintf("resposta inesperada no download: %s", resp.Status))
+	}
+
+	// Escreve em arquivo temporário primeiro para evitar binário corrompido
+	tmpFile, err := os.CreateTemp(binDir, "remembrall-update-*")
+	if err != nil {
+		_ = os.Rename(oldBin, currentBin)
+		logger.Fatal(fmt.Sprintf("erro ao criar arquivo temporário: %w", err))
+	}
+	tmpPath := tmpFile.Name()
+
+	_, err = io.Copy(tmpFile, resp.Body)
+	tmpFile.Close()
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		_ = os.Rename(oldBin, currentBin)
+		logger.Fatal(fmt.Sprintf("erro ao salvar binário: %w", err))
+	}
+
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(tmpPath, 0755); err != nil {
+			_ = os.Remove(tmpPath)
+			_ = os.Rename(oldBin, currentBin)
+			logger.Fatal(fmt.Sprintf("erro ao definir permissões: %w", err))
+		}
+	}
+
+	if err := os.Rename(tmpPath, currentBin); err != nil {
+		_ = os.Remove(tmpPath)
+		_ = os.Rename(oldBin, currentBin)
+		logger.Fatal(fmt.Sprintf("erro ao mover binário para destino final: %w", err))
+	}
+
+	return nil
 }
 
 var UpdateApplyCommand *cli.Command = &cli.Command{
@@ -174,13 +255,13 @@ var UpdateApplyCommand *cli.Command = &cli.Command{
 			}
 
 			runner := func() {
-				assetURL, ok := findAssetURL(release)
+				remembrallURL, remembralldURL, ok := FindAssetURLs(release)
 				if !ok {
 					logger.Fatal(fmt.Sprintf("nenhum asset encontrado para %s", assetSuffix()))
 				}
 
 				// ── Resolver caminhos por OS ──────────────────────────────────────────────
-				var binDir, binaryName string
+				var binDir, binaryName, daemonName string
 
 				switch runtime.GOOS {
 				case "linux", "darwin":
@@ -190,6 +271,7 @@ var UpdateApplyCommand *cli.Command = &cli.Command{
 					}
 					binDir = filepath.Join(home, ".local", "bin")
 					binaryName = "remembrall"
+					daemonName = "remembralld"
 
 				case "windows":
 					localAppData := os.Getenv("LOCALAPPDATA")
@@ -198,13 +280,24 @@ var UpdateApplyCommand *cli.Command = &cli.Command{
 					}
 					binDir = filepath.Join(localAppData, "Programs", "remembrall")
 					binaryName = "remembrall.exe"
+					daemonName = "remembralld.exe"
 
 				default:
 					logger.Fatal(fmt.Sprintf("sistema operacional não suportado: %s", runtime.GOOS))
 				}
 
+				// TODO: Stop daemon
+
 				currentBin := filepath.Join(binDir, binaryName)
 				oldBin := filepath.Join(binDir, strings.TrimSuffix(binaryName, ".exe")+"-old"+func() string {
+					if runtime.GOOS == "windows" {
+						return ".exe"
+					}
+					return ""
+				}())
+
+				currentDaemon := filepath.Join(binDir, daemonName)
+				oldDaemon := filepath.Join(binDir, strings.TrimSuffix(daemonName, ".exe")+"-old"+func() string {
 					if runtime.GOOS == "windows" {
 						return ".exe"
 					}
@@ -221,71 +314,25 @@ var UpdateApplyCommand *cli.Command = &cli.Command{
 					}
 				}
 
+				if _, erro := os.Stat(currentDaemon); erro == nil {
+					_ = os.Remove(oldDaemon)
+
+					if err := os.Rename(currentDaemon, oldDaemon); err != nil {
+						// Rollback do binário principal
+						_ = os.Rename(oldBin, currentBin)
+						logger.Fatal(fmt.Sprintf("erro ao renomear binário do daemon: %w", err))
+					}
+				}
+
 				// ── 2. Baixar novo binário ────────────────────────────────────────────────
 				if err := os.MkdirAll(binDir, 0755); err != nil {
 					logger.Fatal(fmt.Sprintf("erro ao criar diretório %s: %w", binDir, err))
 				}
 
-				transport := &http.Transport{
-					DialContext: (&net.Dialer{
-						Timeout: 30 * time.Second, // timeout só na conexão TCP
-					}).DialContext,
-					TLSHandshakeTimeout: 10 * time.Second,
-				}
-
-				client := &http.Client{Transport: transport}
-
-				req, err := http.NewRequest(http.MethodGet, assetURL, nil)
-				if err != nil {
-					logger.Fatal(fmt.Sprintf("erro ao criar requisição: %w", err))
-				}
-
-				resp, err := client.Do(req)
-				if err != nil {
-					// Rollback: restaura o binário anterior
-					_ = os.Rename(oldBin, currentBin)
-					logger.Fatal(fmt.Sprintf("erro no download: %w", err))
-				}
-				defer resp.Body.Close()
-
-				if resp.StatusCode != http.StatusOK {
-					_ = os.Rename(oldBin, currentBin)
-					logger.Fatal(fmt.Sprintf("resposta inesperada no download: %s", resp.Status))
-				}
-
-				// Escreve em arquivo temporário primeiro para evitar binário corrompido
-				tmpFile, err := os.CreateTemp(binDir, "remembrall-update-*")
-				if err != nil {
-					_ = os.Rename(oldBin, currentBin)
-					logger.Fatal(fmt.Sprintf("erro ao criar arquivo temporário: %w", err))
-				}
-				tmpPath := tmpFile.Name()
-
-				_, err = io.Copy(tmpFile, resp.Body)
-				tmpFile.Close()
-				if err != nil {
-					_ = os.Remove(tmpPath)
-					_ = os.Rename(oldBin, currentBin)
-					logger.Fatal(fmt.Sprintf("erro ao salvar binário: %w", err))
-				}
-
-				// ── 3. Tornar executável (unix) e mover para destino final ────────────────
-				if runtime.GOOS != "windows" {
-					if err := os.Chmod(tmpPath, 0755); err != nil {
-						_ = os.Remove(tmpPath)
-						_ = os.Rename(oldBin, currentBin)
-						logger.Fatal(fmt.Sprintf("erro ao definir permissões: %w", err))
-					}
-				}
-
-				if err := os.Rename(tmpPath, currentBin); err != nil {
-					_ = os.Remove(tmpPath)
-					_ = os.Rename(oldBin, currentBin)
-					logger.Fatal(fmt.Sprintf("erro ao mover binário para destino final: %w", err))
-				}
+				DownloadAndReplaceBinary(remembrallURL, binDir, currentBin, oldBin)
+				DownloadAndReplaceBinary(remembralldURL, binDir, currentDaemon, oldDaemon)
 
 				// TODO: Migrações e outras tarefas
-
 			}
 
 			_ = spinner.New().

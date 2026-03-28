@@ -9,23 +9,28 @@ import (
 var OS_CONFIGS = map[string]map[string]string{
 	"APP_DIR": {
 		"windows": "%APPDATA%\\remembrall",
-		"darwin":  "~/.config/remembrall",
-		"linux":   "~/.config/remembrall",
+		"darwin":  "/.config/remembrall",
+		"linux":   "/.config/remembrall",
 	},
 	"APP_CONFIG_FILE_NAME": {
 		"windows": "%APPDATA%\\remembrall\\config.json",
-		"darwin":  "~/.config/remembrall/config.json",
-		"linux":   "~/.config/remembrall/config.json",
+		"darwin":  "/.config/remembrall/config.json",
+		"linux":   "/.config/remembrall/config.json",
 	},
 	"APP_DB_FILE_NAME": {
 		"windows": "%APPDATA%\\remembrall\\remembrall.db",
-		"darwin":  "~/.config/remembrall/remembrall.db",
-		"linux":   "~/.config/remembrall/remembrall.db",
+		"darwin":  "/.config/remembrall/remembrall.db",
+		"linux":   "/.config/remembrall/remembrall.db",
 	},
 	"APP_BINARY_LOCATION": {
 		"windows": "%LOCALAPPDATA%\\Programs\\remembrall.exe",
-		"darwin":  "/usr/local/bin/remembrall",
-		"linux":   "/usr/local/bin/remembrall",
+		"darwin":  "/.local/bin/remembrall",
+		"linux":   "/.local/bin/remembrall",
+	},
+	"APP_DAEMON_LOCATION": {
+		"windows": "%LOCALAPPDATA%\\Programs\\remembralld.exe",
+		"darwin":  "/.local/bin/remembralld",
+		"linux":   "/.local/bin/remembralld",
 	},
 }
 

@@ -2,16 +2,24 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"charm.land/huh/v2"
+	spinner "charm.land/huh/v2/spinner"
 	"github.com/costaluu/remembrall/src/cli/internal/config"
 	"github.com/costaluu/remembrall/src/cli/internal/constants"
 	"github.com/costaluu/remembrall/src/cli/internal/filesystem"
 	"github.com/costaluu/remembrall/src/cli/internal/logger"
+	"github.com/emersion/go-autostart"
 	"github.com/urfave/cli/v3"
 )
 
@@ -72,12 +80,12 @@ var SetupCommand *cli.Command = &cli.Command{
 		}
 
 		logger.Info("valiting initial setup...")
-		logger.Info("Checking config path folder...")
+		logger.Info("checking config path folder...")
 
 		configFolderExists := filesystem.FolderExists(configPathBase)
 
 		if !configFolderExists {
-			logger.Info("Config folder does not exist. Creating config folder...")
+			logger.Info("config folder does not exist. creating config folder...")
 
 			filesystem.FileCreateFolder(path.Join(configPathBase))
 		}
@@ -85,9 +93,114 @@ var SetupCommand *cli.Command = &cli.Command{
 		configFileExists := filesystem.FileExists(path.Join(configPathBase, "config.json"))
 
 		if !configFileExists {
-			logger.Info("Config file does not exist. Creating config file...")
+			logger.Info("config file does not exist. creating config file...")
 
 			config.CreateConfig()
+		}
+
+		configDir, err := os.UserConfigDir()
+
+		if err != nil {
+			logger.Fatal("failed to get user config directory: " + err.Error())
+		}
+
+		daemonExists := filesystem.FileExists(path.Join(configDir, constants.OS_CONFIGS["APP_DAEMON_LOCATION"][runtime.GOOS]))
+
+		if !daemonExists {
+			release, err := fetchLatestRelease(constants.GITHUB_OWNER, constants.GITHUB_REPO)
+
+			if err != nil {
+				logger.Fatal(err)
+			}
+
+			_, remembralldURL, ok := FindAssetURLs(release)
+
+			if !ok {
+				logger.Fatal(fmt.Sprintf("nenhum asset encontrado para %s", assetSuffix()))
+			}
+
+			runner := func() {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					logger.Fatal(fmt.Sprintf("erro ao obter home dir: %w", err))
+				}
+
+				binDir := filepath.Join(home, ".local", "bin")
+
+				transport := &http.Transport{
+					DialContext: (&net.Dialer{
+						Timeout: 30 * time.Second, // timeout só na conexão TCP
+					}).DialContext,
+					TLSHandshakeTimeout: 10 * time.Second,
+				}
+
+				client := &http.Client{Transport: transport}
+
+				req, err := http.NewRequest(http.MethodGet, remembralldURL, nil)
+				if err != nil {
+					logger.Fatal(fmt.Sprintf("erro ao criar requisição: %w", err))
+				}
+
+				resp, err := client.Do(req)
+				if err != nil {
+					logger.Fatal(fmt.Sprintf("erro no download: %w", err))
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusOK {
+					logger.Fatal(fmt.Sprintf("resposta inesperada no download: %s", resp.Status))
+				}
+
+				tmpFile, err := os.Create(path.Join(binDir, "remembralld"))
+
+				if err != nil {
+					logger.Fatal(fmt.Sprintf("erro ao criar arquivo temporário: %w", err))
+				}
+				tmpPath := tmpFile.Name()
+
+				_, err = io.Copy(tmpFile, resp.Body)
+				tmpFile.Close()
+				if err != nil {
+					logger.Fatal(fmt.Sprintf("erro ao salvar binário: %w", err))
+				}
+
+				if runtime.GOOS != "windows" {
+					if err := os.Chmod(tmpPath, 0755); err != nil {
+						logger.Fatal(fmt.Sprintf("erro ao definir permissões: %w", err))
+					}
+				}
+			}
+
+			_ = spinner.New().
+				Title("daemon binary not found. creating daemon binary...").
+				Type(spinner.Dots).
+				Action(runner).
+				Run()
+
+			// Executar daemon
+
+			logger.Info("starting daemon...")
+
+			if runtime.GOOS != "windows" {
+				err = exec.Command("./.local/bin/remembralld").Start()
+
+				if err != nil {
+					logger.Fatal(fmt.Sprintf("failed to start daemon: %w", err))
+				}
+			} else {
+				localAppData := os.Getenv("LOCALAPPDATA")
+				if localAppData == "" {
+					logger.Fatal("LOCALAPPDATA environment variable is not set")
+				}
+
+				err = exec.Command(filepath.Join(localAppData, "Programs", "remembralld.exe")).Start()
+
+				if err != nil {
+					logger.Fatal(fmt.Sprintf("failed to start daemon: %w", err))
+				}
+			}
+
+			logger.Success("daemon started successfully!")
 		}
 
 		pathsCorrect := pathsAlreadyInPATH()
@@ -95,6 +208,38 @@ var SetupCommand *cli.Command = &cli.Command{
 		if !pathsCorrect {
 			logger.Warning("The installation path is not in your PATH environment variable. Please add it to be able to run remembrall from anywhere.")
 			logger.Info("Installation path: " + constants.OS_CONFIGS["APP_BINARY_LOCATION"][runtime.GOOS])
+		}
+
+		var executeDaemonOnStartup bool = true
+
+		huh.NewConfirm().
+			Title("Do you want to execute the remembrall daemon on startup? (recommended)").
+			Affirmative("Yes!").
+			Negative("No.").
+			Value(&executeDaemonOnStartup).
+			Run()
+
+		if executeDaemonOnStartup {
+			home, err := os.UserHomeDir()
+
+			if err != nil {
+				logger.Fatal(err)
+			}
+
+			app := &autostart.App{
+				Name:        fmt.Sprintf("%s daemon", constants.APP_NAME),
+				DisplayName: fmt.Sprintf("%s daemon", constants.APP_NAME),
+				Exec:        []string{home, constants.OS_CONFIGS["APP_DAEMON_LOCATION"][runtime.GOOS]},
+			}
+
+			if app.IsEnabled() {
+				logger.Info("remembrall daemon is already set to execute on startup.")
+			} else {
+				if err := app.Enable(); err != nil {
+					logger.Fatal(fmt.Sprintf("failed to enable autostart: %w", err))
+				}
+				logger.Success("remembrall daemon set to execute on startup successfully!")
+			}
 		}
 
 		var timeFormat string = "European Format"

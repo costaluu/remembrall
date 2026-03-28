@@ -20,7 +20,8 @@ var ResetCommand *cli.Command = &cli.Command{
 				Title("Are you sure? This will reset all configurations and clear everything.").
 				Affirmative("Yes").
 				Negative("No.").
-				Value(&confirm)
+				Value(&confirm).
+				Run()
 
 		if err != nil {
 			logger.Fatal(err.Error())
