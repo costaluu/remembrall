@@ -256,7 +256,7 @@ var SetupCommand *cli.Command = &cli.Command{
 
 		SetDatabaseLocationCommandAction(ctx, cmd)
 
-		logger.Success("Setup completed successfully!")
+		logger.Success("setup completed successfully!")
 
 		return nil
 	},
