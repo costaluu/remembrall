@@ -153,6 +153,32 @@ jobs:
           git push origin "$NEW_TAG"
           echo "Tag $NEW_TAG publicada com sucesso."
 
+      # ─── Rollback da tag em caso de falha ───────────────────────────────────
+      - name: Rollback tag on failure
+        if: |
+          failure() &&
+          steps.commits.outputs.has_commits == 'true' &&
+          steps.tag_check.outputs.already_exists == 'false' &&
+          steps.next_version.outputs.tag != ''
+        run: |
+          NEW_TAG="${{ steps.next_version.outputs.tag }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Verifica se a tag existe localmente ou no remoto antes de tentar deletar
+          if git tag --list | grep -qx "$NEW_TAG"; then
+            git tag -d "$NEW_TAG"
+            echo "Tag local $NEW_TAG removida."
+          fi
+
+          if git ls-remote --tags origin | grep -q "refs/tags/${NEW_TAG}$"; then
+            git push origin ":refs/tags/${NEW_TAG}"
+            echo "Tag remota $NEW_TAG removida."
+          fi
+
+          echo "Rollback concluído para a tag $NEW_TAG."
+
       # ─── Build dos binários (multi-OS / multi-ARCH) ──────────────────────────
       - name: Set up Go
         if: |
@@ -183,6 +209,9 @@ jobs:
             ARCH="${PLATFORM##*/}"
             SUFFIX="${TARGETS[$PLATFORM]}"
 
+            EXTRA_WINDOWS_COMMAND=""
+            [ "$OS" = "windows" ] && EXTRA_WINDOWS_COMMAND="CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++"
+
             CGO="0"
             [ "$OS" = "windows" ] && CGO="1"
 
@@ -197,7 +226,7 @@ jobs:
             [ "$OS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
 
             echo "Building DAEMON binaries $OUTPUT..."
-            GOOS="$OS" GOARCH="$ARCH" CGO_ENABLED="$CGO" go build -ldflags="-X main.VERSION=${NEW_TAG}" \
+            GOOS="$OS" GOARCH="$ARCH" CGO_ENABLED="$CGO" $EXTRA_WINDOWS_COMMAND go build -ldflags="-X main.VERSION=${NEW_TAG}" \
               -o "$OUTPUT" ./src/daemon
           done
 
