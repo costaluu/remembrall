@@ -313,7 +313,7 @@ var SetupCommand *cli.Command = &cli.Command{
 
 		SetTimeFormat(timeFormat)
 
-		logger.Success("Time format set to " + timeFormat + ".")
+		logger.Success("time format set to " + timeFormat + ".")
 
 		SetDatabaseLocationCommandAction(ctx, cmd)
 
