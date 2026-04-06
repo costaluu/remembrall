@@ -9,7 +9,7 @@ import (
 func SecondaryTextStyle[T any](msg T) string {
 	var defaultStyle = lipgloss.
 		NewStyle().
-		SetString(fmt.Sprintf("%x", msg)).
+		SetString(fmt.Sprintf("%s", msg)).
 		Foreground(lipgloss.Color("242"))
 
 	return defaultStyle.Render()

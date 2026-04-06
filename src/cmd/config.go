@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"charm.land/huh/v2"
 	"github.com/costaluu/taskthing/src/config"
@@ -78,6 +79,10 @@ func SetDatabaseLocationCommandAction(ctx context.Context, cmd *cli.Command) err
 		currentConfig.DatabaseLocation = oldLocation
 	} else {
 		currentConfig.DatabaseLocation = newLocation
+	}
+
+	if os.Getenv("TT_VERSION") == "dev" {
+		currentConfig.DatabaseLocation = "./dev.db"
 	}
 
 	err := config.SaveConfig(currentConfig)

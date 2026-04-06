@@ -4,13 +4,12 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"runtime"
+	"os"
 	"time"
 
 	"github.com/costaluu/taskthing/src/constants"
 	"github.com/costaluu/taskthing/src/filesystem"
 	"github.com/costaluu/taskthing/src/logger"
-	"github.com/costaluu/taskthing/src/utils"
 )
 
 //go:embed default_config.json
@@ -40,21 +39,23 @@ func CreateConfig() {
 	var err error
 	var defaultConfig Config = GetDefaultConfig()
 
-	if filesystem.FolderExists(utils.ReplaceTildeWithHomeDir(constants.OS_CONFIGS["APP_DIR"][runtime.GOOS])) {
-		err = filesystem.FileDeleteFolder(constants.OS_CONFIGS["APP_DIR"][runtime.GOOS])
+	if os.Getenv("TT_VERSION") != "dev" && filesystem.FolderExists(constants.GetPathVariable("APP_DIR")) {
+		err = filesystem.FileDeleteFolder(constants.GetPathVariable("APP_DIR"))
 
 		if err != nil {
 			logger.Fatal("Failed to delete config directory: " + err.Error())
 		}
 	}
 
-	err = filesystem.FileCreateFolder(constants.OS_CONFIGS["APP_DIR"][runtime.GOOS])
+	if os.Getenv("TT_VERSION") != "dev" {
+		err = filesystem.FileCreateFolder(constants.GetPathVariable("APP_DIR"))
 
-	if err != nil {
-		logger.Fatal("Failed to create config directory: " + err.Error())
+		if err != nil {
+			logger.Fatal("Failed to create config directory: " + err.Error())
+		}
 	}
 
-	err = filesystem.FileWriteJSONToFile(constants.OS_CONFIGS["APP_CONFIG_LOCATION"][runtime.GOOS], defaultConfig)
+	err = filesystem.FileWriteJSONToFile(constants.GetPathVariable("APP_CONFIG_LOCATION"), defaultConfig)
 
 	if err != nil {
 		logger.Fatal("Failed to write default config: " + err.Error())
@@ -66,7 +67,7 @@ func LoadConfig() Config {
 
 	var config Config
 
-	err = filesystem.FileReadJSONFromFile(utils.ReplaceTildeWithHomeDir(constants.OS_CONFIGS["APP_CONFIG_LOCATION"][runtime.GOOS]), &config)
+	err = filesystem.FileReadJSONFromFile(constants.GetPathVariable("APP_CONFIG_LOCATION"), &config)
 
 	if err != nil {
 		logger.Fatal(err)
@@ -78,7 +79,7 @@ func LoadConfig() Config {
 func SaveConfig(config Config) error {
 	var err error
 
-	err = filesystem.FileWriteJSONToFile(utils.ReplaceTildeWithHomeDir(constants.OS_CONFIGS["APP_CONFIG_LOCATION"][runtime.GOOS]), config)
+	err = filesystem.FileWriteJSONToFile(constants.GetPathVariable("APP_CONFIG_LOCATION"), config)
 
 	if err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)

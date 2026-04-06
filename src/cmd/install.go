@@ -2,13 +2,9 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"charm.land/huh/v2"
 	"github.com/costaluu/taskthing/src/config"
@@ -16,7 +12,6 @@ import (
 	"github.com/costaluu/taskthing/src/db"
 	"github.com/costaluu/taskthing/src/filesystem"
 	"github.com/costaluu/taskthing/src/logger"
-	"github.com/costaluu/taskthing/src/utils"
 	"github.com/urfave/cli/v3"
 )
 
@@ -63,27 +58,6 @@ func pathsAlreadyInPATH() bool {
 	return true
 }
 
-func isProcessRunning(processName string) bool {
-	isRunningLinux := func(name string) bool {
-		out, err := exec.Command("pgrep", "-f", name).Output()
-		return err == nil && len(out) > 0
-	}
-
-	isRunningWindows := func(name string) bool {
-		out, err := exec.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", name)).Output()
-		return err == nil && strings.Contains(string(out), name)
-	}
-
-	switch runtime.GOOS {
-	case "linux", "darwin":
-		return isRunningLinux(processName)
-	case "windows":
-		return isRunningWindows(processName)
-	default:
-		return false
-	}
-}
-
 var InstallCommand *cli.Command = &cli.Command{
 	Name:  "install",
 	Usage: "install the application",
@@ -91,17 +65,17 @@ var InstallCommand *cli.Command = &cli.Command{
 		logger.Info("valiting initial setup...")
 		logger.Info("checking config path folder...")
 
-		configFolderExists := filesystem.FolderExists(utils.ReplaceTildeWithHomeDir(constants.OS_CONFIGS["APP_DIR"][runtime.GOOS]))
+		configFolderExists := filesystem.FolderExists(constants.GetPathVariable("APP_DIR"))
 
 		if !configFolderExists {
 			logger.Info("config folder does not exist. creating config folder...")
 
-			filesystem.FileCreateFolder(utils.ReplaceTildeWithHomeDir(constants.OS_CONFIGS["APP_DIR"][runtime.GOOS]))
+			filesystem.FileCreateFolder(constants.GetPathVariable("APP_DIR"))
 		}
 
 		logger.Info("checking config path file...")
 
-		configFileExists := filesystem.FileExists(path.Join(utils.ReplaceTildeWithHomeDir(constants.OS_CONFIGS["APP_DIR"][runtime.GOOS]), "config.json"))
+		configFileExists := filesystem.FileExists(constants.GetPathVariable("APP_CONFIG_LOCATION"))
 
 		if !configFileExists {
 			logger.Info("config file does not exist. creating config file...")
@@ -113,7 +87,7 @@ var InstallCommand *cli.Command = &cli.Command{
 
 		if !pathsCorrect {
 			logger.Warning("The installation path is not in your PATH environment variable. Please add it to be able to run taskthing from anywhere.")
-			logger.Info("Installation path: " + constants.OS_CONFIGS["APP_BINARY_LOCATION"][runtime.GOOS])
+			logger.Info("Installation path: " + constants.GetPathVariable("APP_BINARY_LOCATION"))
 		}
 
 		var timeFormat string = "European Format"
