@@ -1,4 +1,4 @@
-.PHONY: exec migrate
+.PHONY: exec migrate %
 
 SRC = src/main.go
 
@@ -8,7 +8,7 @@ GEN_FILE = $(MIGRATIONS_DIR)/migrations.go
 
 ## exec: Roda o app passando qualquer argumento seguinte (ex: make exec install)
 exec:
-	@TT_VERSION=dev go run $(SRC) $(filter-out $@,$(MAKECMDGOALS))
+	@DEV_MODE=true go run $(SRC) $(filter-out $@,$(MAKECMDGOALS))
 
 ## migrate: Gera uma nova migração (ex: make migrate v=v0.0.1)
 migrate:
@@ -53,3 +53,7 @@ migrate:
 	@printf "\treturn m\n" >> $(GEN_FILE)
 	@printf "}\n" >> $(GEN_FILE)
 	@echo "Done! Generated: $(GEN_FILE)"
+
+
+%:
+	@:

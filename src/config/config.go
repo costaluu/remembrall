@@ -39,7 +39,7 @@ func CreateConfig() {
 	var err error
 	var defaultConfig Config = GetDefaultConfig()
 
-	if os.Getenv("TT_VERSION") != "dev" && filesystem.FolderExists(constants.GetPathVariable("APP_DIR")) {
+	if os.Getenv("DEV_MODE") != "true" && filesystem.FolderExists(constants.GetPathVariable("APP_DIR")) {
 		err = filesystem.FileDeleteFolder(constants.GetPathVariable("APP_DIR"))
 
 		if err != nil {
@@ -47,7 +47,7 @@ func CreateConfig() {
 		}
 	}
 
-	if os.Getenv("TT_VERSION") != "dev" {
+	if os.Getenv("DEV_MODE") != "true" {
 		err = filesystem.FileCreateFolder(constants.GetPathVariable("APP_DIR"))
 
 		if err != nil {

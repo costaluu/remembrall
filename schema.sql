@@ -3,13 +3,16 @@ CREATE TABLE IF NOT EXISTS tasks (
     active              INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
     title               TEXT NOT NULL,
 
-    dtstart             DATETIME,
-    rrule               TEXT,                        -- NULL = single task
+    rrule               TEXT, -- if null is a single task
 
+    -- Computed Helpers 
+
+    dtstart             DATETIME,
     until               DATETIME,
     count               INTEGER,
-
     next_occurrence     DATETIME,
+
+    -- Computed Helpers
 
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP

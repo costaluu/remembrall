@@ -81,7 +81,7 @@ func SetDatabaseLocationCommandAction(ctx context.Context, cmd *cli.Command) err
 		currentConfig.DatabaseLocation = newLocation
 	}
 
-	if os.Getenv("TT_VERSION") == "dev" {
+	if os.Getenv("DEV_MODE") == "true" {
 		currentConfig.DatabaseLocation = "./dev.db"
 	}
 

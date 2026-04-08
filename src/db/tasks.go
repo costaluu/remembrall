@@ -5,59 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/costaluu/taskthing/src/logger"
-	rrule "github.com/teambition/rrule-go"
-
-	nanoid "github.com/matoous/go-nanoid/v2"
 )
-
-func newID() string {
-	gen, err := nanoid.Generate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 21)
-
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	return gen
-}
-
-// computeNext returns the next occurrence of a task after 'after'.
-// Returns nil if the series has ended or the task is not recurring.
-func computeNext(task *Task, after time.Time) *time.Time {
-	if task.Rrule == nil {
-		return nil
-	}
-
-	if task.Dtstart == nil { // sem dtstart, não há como calcular ocorrências
-		return nil
-	}
-
-	loc, err := time.LoadLocation("")
-
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	dtstart := task.Dtstart.In(loc)
-
-	ruleStr := *task.Rrule
-
-	// rrule-go requires DTSTART to be prepended when parsing standalone RRULE strings
-	set, err := rrule.StrToRRuleSet(fmt.Sprintf("DTSTART:%s\nRRULE:%s", dtstart.UTC().Format("20060102T150405Z"), ruleStr))
-
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	next := set.After(after, false)
-
-	if next.IsZero() {
-		return nil
-	}
-
-	return &next
-}
 
 // ─── CREATE ──────────────────────────────────────────────────────────────────
 

@@ -39,7 +39,7 @@ var OS_CONFIGS = map[string]map[string]string{
 func GetPathVariable(variable string) string {
 	var ostring string = runtime.GOOS
 
-	if os.Getenv("TT_VERSION") == "dev" {
+	if os.Getenv("DEV_MODE") == "true" {
 		ostring = "dev_" + ostring
 	}
 
