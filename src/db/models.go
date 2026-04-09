@@ -14,6 +14,7 @@ type Task struct {
 	ID             string
 	Active         bool
 	Title          string
+	Star           bool
 	Dtstart        *time.Time
 	Rrule          *string
 	Until          *time.Time
@@ -31,6 +32,14 @@ func WithTitle(title string) TaskOption {
 
 func WithActive(active bool) TaskOption {
 	return func(t *Task) { t.Active = active }
+}
+
+func WithStar(star bool) TaskOption {
+	return func(t *Task) { t.Star = star }
+}
+
+func WithDtstart(dtstart *time.Time) TaskOption {
+	return func(t *Task) { t.Dtstart = dtstart }
 }
 
 func WithRrule(rrule rrule.RRule) TaskOption {
@@ -72,6 +81,7 @@ func NewTask(opts ...TaskOption) Task {
 	task := Task{
 		ID:        gen,
 		Active:    true,
+		Star:      false,
 		Title:     "New task",
 		CreatedAt: now,
 		UpdatedAt: now,

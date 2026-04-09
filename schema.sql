@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     id                  TEXT PRIMARY KEY NOT NULL,
     active              INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
     title               TEXT NOT NULL,
-
+    star                INTEGER NOT NULL DEFAULT 0 CHECK (star in (0, 1)),
     rrule               TEXT, -- if null is a single task
 
     -- Computed Helpers 

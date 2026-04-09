@@ -21,6 +21,7 @@ type Config struct {
 	LatestVersion          string    `json:"latest_version"`
 	LatestVersionCheckTime time.Time `json:"latest_version_check_time"`
 	NeedsUpdate            bool      `json:"needs_update"`
+	DarkTheme              bool      `json:"dark_theme"`
 }
 
 func GetDefaultConfig() Config {

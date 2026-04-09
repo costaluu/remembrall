@@ -34,6 +34,12 @@ var OS_CONFIGS = map[string]map[string]string{
 		"windows":   "%LOCALAPPDATA%\\taskthing\\taskthing.exe",
 		"dev_linux": "~/.local/bin/taskthing",
 	},
+	"APP_KVSTORE_LOCATION": {
+		"linux":     "~/.config/taskthing/id_store.json",
+		"darwin":    "~/.config/taskthing/id_store.json",
+		"windows":   "%LOCALAPPDATA%\\taskthing\\id_store.json",
+		"dev_linux": "./id_store.json",
+	},
 }
 
 func GetPathVariable(variable string) string {

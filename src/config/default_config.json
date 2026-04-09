@@ -3,5 +3,6 @@
     "database_location": "file:~/.config/taskthing/taskthing.db",
     "latest_version": "0.0.0",
     "latest_version_check_time": "2024-06-01T00:00:00Z",
-    "needs_update": false
+    "needs_update": false,
+    "dark_theme": true
 }

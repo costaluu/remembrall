@@ -2,6 +2,7 @@ package utils
 
 import (
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/costaluu/taskthing/src/logger"
@@ -15,4 +16,8 @@ func ReplaceTildeWithHomeDir(path string) string {
 	}
 
 	return strings.Replace(path, "~", homeDir, 1)
+}
+
+func IsNumeric(s string) bool {
+	return regexp.MustCompile(`^[0-9]+$`).MatchString(s)
 }
