@@ -1,10 +1,10 @@
-.PHONY: migrate
+.PHONY: migrate %
 
 # Variables
 MIGRATIONS_DIR = src/db/migrations
 GEN_FILE = $(MIGRATIONS_DIR)/migrations.go
 
-# Target to run atlas and generate the Go embed file
+## migrate: Gera uma nova migração (ex: make migrate v=v0.0.1)
 migrate:
 	@if [ -z "$(v)" ]; then \
 		echo "Error: Version is required. usage: make migrate v=v0.0.1"; \
@@ -14,22 +14,7 @@ migrate:
 	atlas migrate diff $(v) --env local
 
 	rm -f $(GEN_FILE)
-	
-	.PHONY: migrate
 
-# Variables
-MIGRATIONS_DIR = src/db/migrations
-GEN_FILE = $(MIGRATIONS_DIR)/migrations.go
-
-# Target to run atlas and generate the Go embed file
-migrate:
-	@if [ -z "$(v)" ]; then \
-		echo "Error: Version is required. usage: make migrate v=v0.0.1"; \
-		exit 1; \
-	fi
-	@echo "--- Running Atlas Migrate Diff for version $(v) ---"
-	atlas migrate diff $(v) --env local
-	
 	@echo "--- Generating Go migration wrapper with Name Parsing ---"
 	@printf "package migrations\n\n" > $(GEN_FILE)
 	@printf "import (\n\t\"embed\"\n\t\"io/fs\"\n\t\"strings\"\n)\n\n" >> $(GEN_FILE)

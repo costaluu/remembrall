@@ -157,7 +157,7 @@ main() {
 
   echo -e "  Depois é só rodar:"
   echo ""
-  echo -e "    ${CYAN}taskthing setup${RESET}"
+  echo -e "    ${CYAN}taskthing install${RESET}"
   echo ""
 }
 

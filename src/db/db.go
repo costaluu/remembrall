@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	_ "embed"
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
+	_ "modernc.org/sqlite"
 
 	"github.com/costaluu/taskthing/src/config"
 	"github.com/costaluu/taskthing/src/db/migrations"
 	"github.com/costaluu/taskthing/src/logger"
 	"github.com/costaluu/taskthing/src/utils"
-	_ "github.com/tursodatabase/libsql-client-go/libsql"
-	_ "modernc.org/sqlite"
 )
 
 func Open() (*sql.DB, error) {
@@ -52,8 +51,15 @@ func ApplyAllMigrations() {
 
 	for _, migration := range migrations {
 		_, err := db.Exec(migration.Script)
+
 		if err != nil {
 			logger.Fatal(fmt.Errorf("failed to execute migration: %w", err))
+		}
+
+		_, err = db.Exec("INSERT INTO schema_migrations (version) VALUES (?)", migration.Version)
+
+		if err != nil {
+			logger.Fatal(fmt.Errorf("failed to record migration: %w", err))
 		}
 	}
 }

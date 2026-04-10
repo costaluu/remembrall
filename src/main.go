@@ -26,6 +26,11 @@ func main() {
 			cmd.UpdateCommands,
 			cmd.ResetCommand,
 			cmd.ConfigCommands,
+			cmd.AddCommand,
+			cmd.RmCommand,
+			cmd.ListCommand,
+			cmd.CheckCommand,
+			cmd.TestCommand,
 		},
 	}
 

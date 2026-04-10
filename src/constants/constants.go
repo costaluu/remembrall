@@ -1,7 +1,18 @@
 package constants
 
 import (
+	"os"
+	"runtime"
+
 	"charm.land/lipgloss/v2"
+	"github.com/costaluu/taskthing/src/utils"
+)
+
+type Theme string
+
+const (
+	ThemeDark  Theme = "dark"
+	ThemeLight Theme = "light"
 )
 
 var (
@@ -13,20 +24,41 @@ var (
 
 var OS_CONFIGS = map[string]map[string]string{
 	"APP_DIR": {
-		"linux":   "~/.config/taskthing",
-		"darwin":  "~/.config/taskthing",
-		"windows": "%LOCALAPPDATA%\\taskthing",
+		"linux":     "~/.config/taskthing",
+		"darwin":    "~/.config/taskthing",
+		"windows":   "%LOCALAPPDATA%\\taskthing",
+		"dev_linux": ".",
 	},
 	"APP_CONFIG_LOCATION": {
-		"linux":   "~/.config/taskthing/config.json",
-		"darwin":  "~/.config/taskthing/config.json",
-		"windows": "%LOCALAPPDATA%\\taskthing\\config.json",
+		"linux":     "~/.config/taskthing/config.json",
+		"darwin":    "~/.config/taskthing/config.json",
+		"windows":   "%LOCALAPPDATA%\\taskthing\\config.json",
+		"dev_linux": "./config.json",
 	},
 	"APP_BINARY_LOCATION": {
-		"linux":   "~/.local/bin/taskthing",
-		"darwin":  "~/.local/bin/taskthing",
-		"windows": "%LOCALAPPDATA%\\taskthing\\taskthing.exe",
+		"linux":     "~/.local/bin/taskthing",
+		"darwin":    "~/.local/bin/taskthing",
+		"windows":   "%LOCALAPPDATA%\\taskthing\\taskthing.exe",
+		"dev_linux": "~/.local/bin/taskthing",
 	},
+	"APP_KVSTORE_LOCATION": {
+		"linux":     "~/.config/taskthing/id_store.json",
+		"darwin":    "~/.config/taskthing/id_store.json",
+		"windows":   "%LOCALAPPDATA%\\taskthing\\id_store.json",
+		"dev_linux": "./id_store.json",
+	},
+}
+
+func GetPathVariable(variable string) string {
+	var ostring string = runtime.GOOS
+
+	if os.Getenv("DEV_MODE") == "true" {
+		ostring = "dev_" + ostring
+	}
+
+	result := utils.ReplaceTildeWithHomeDir(OS_CONFIGS[variable][ostring])
+
+	return result
 }
 
 var (

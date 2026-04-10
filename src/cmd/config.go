@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"charm.land/huh/v2"
 	"github.com/costaluu/taskthing/src/config"
@@ -10,6 +11,46 @@ import (
 	"github.com/costaluu/taskthing/src/logger"
 	"github.com/urfave/cli/v3"
 )
+
+func SetTheme(theme constants.Theme) {
+	currentConfig := config.LoadConfig()
+
+	if theme == constants.ThemeDark {
+		currentConfig.DarkTheme = true
+	} else {
+		currentConfig.DarkTheme = false
+	}
+
+	err := config.SaveConfig(currentConfig)
+
+	if err != nil {
+		logger.Fatal("Failed to save config: " + err.Error())
+	}
+}
+
+var DarkThemeCommand *cli.Command = &cli.Command{
+	Name:  "set-dark-theme",
+	Usage: "set the time format to european (DD/MM/YYYY HH:mm:ss)",
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		SetTheme(constants.ThemeDark)
+
+		logger.Success("dark theme activated.")
+
+		return nil
+	},
+}
+
+var LightThemeCommand *cli.Command = &cli.Command{
+	Name:  "set-light-theme",
+	Usage: "set the time format to american (MM/DD/YYYY HH:mm:ss)",
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		SetTheme(constants.ThemeLight)
+
+		logger.Success("light theme activated.")
+
+		return nil
+	},
+}
 
 func SetTimeFormat(timeFormat string) {
 	currentConfig := config.LoadConfig()
@@ -28,7 +69,7 @@ func SetTimeFormat(timeFormat string) {
 }
 
 var EuropeanTimeFormatCommand *cli.Command = &cli.Command{
-	Name:  "european-time",
+	Name:  "set-european-time",
 	Usage: "set the time format to european (DD/MM/YYYY HH:mm:ss)",
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		SetTimeFormat("European Format")
@@ -40,7 +81,7 @@ var EuropeanTimeFormatCommand *cli.Command = &cli.Command{
 }
 
 var AmericanTimeFormatCommand *cli.Command = &cli.Command{
-	Name:  "american-time",
+	Name:  "set-american-time",
 	Usage: "set the time format to american (MM/DD/YYYY HH:mm:ss)",
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		SetTimeFormat("American Format")
@@ -49,12 +90,6 @@ var AmericanTimeFormatCommand *cli.Command = &cli.Command{
 
 		return nil
 	},
-}
-
-var SetTimeFormatCommand *cli.Command = &cli.Command{
-	Name:     "set-time-format",
-	Usage:    "set the time format for the application",
-	Commands: []*cli.Command{EuropeanTimeFormatCommand, AmericanTimeFormatCommand},
 }
 
 func SetDatabaseLocationCommandAction(ctx context.Context, cmd *cli.Command) error {
@@ -80,6 +115,10 @@ func SetDatabaseLocationCommandAction(ctx context.Context, cmd *cli.Command) err
 		currentConfig.DatabaseLocation = newLocation
 	}
 
+	if os.Getenv("DEV_MODE") == "true" {
+		currentConfig.DatabaseLocation = "./dev.db"
+	}
+
 	err := config.SaveConfig(currentConfig)
 
 	if err != nil {
@@ -100,5 +139,5 @@ var SetDatabaseLocationCommand *cli.Command = &cli.Command{
 var ConfigCommands *cli.Command = &cli.Command{
 	Name:     "config",
 	Usage:    fmt.Sprintf("command to check and apply updates to %s.", constants.APP_NAME),
-	Commands: []*cli.Command{SetTimeFormatCommand, SetDatabaseLocationCommand},
+	Commands: []*cli.Command{AmericanTimeFormatCommand, EuropeanTimeFormatCommand, DarkThemeCommand, LightThemeCommand, SetDatabaseLocationCommand},
 }
