@@ -100,6 +100,18 @@ var InstallCommand *cli.Command = &cli.Command{
 
 		SetTimeFormat(timeFormat)
 
+		var theme constants.Theme = constants.ThemeLight
+
+		huh.NewSelect[string]().
+			Options(huh.NewOptions("Dark Theme", "Light Theme")...).
+			Value(&timeFormat).
+			Title("Select your preferred terminal theme").
+			Run()
+
+		if theme == "Light Theme" {
+			SetTheme(constants.ThemeLight)
+		}
+
 		logger.Success("time format set to " + timeFormat + ".")
 
 		SetDatabaseLocationCommandAction(ctx, cmd)

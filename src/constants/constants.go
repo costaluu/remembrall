@@ -8,6 +8,13 @@ import (
 	"github.com/costaluu/taskthing/src/utils"
 )
 
+type Theme string
+
+const (
+	ThemeDark  Theme = "dark"
+	ThemeLight Theme = "light"
+)
+
 var (
 	APP_NAME     = "taskthing"
 	COMMAND      = "tt"

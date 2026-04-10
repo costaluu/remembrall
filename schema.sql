@@ -15,15 +15,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     -- Computed Helpers
 
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS completions (
-    id                  TEXT PRIMARY KEY NOT NULL,
-    task_id             TEXT NOT NULL,
-    occurrence_date     DATETIME NOT NULL,
-    completed_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at        DATETIME
 );
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -32,4 +25,3 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_next_occurrence ON tasks (next_occurrence, active);
-CREATE INDEX IF NOT EXISTS idx_completion_task      ON completions (task_id, occurrence_date);

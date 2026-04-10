@@ -22,6 +22,7 @@ type Task struct {
 	NextOccurrence *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	CompletedAt    *time.Time
 }
 
 type TaskOption func(*Task)
@@ -40,6 +41,10 @@ func WithStar(star bool) TaskOption {
 
 func WithDtstart(dtstart *time.Time) TaskOption {
 	return func(t *Task) { t.Dtstart = dtstart }
+}
+
+func WithCompletedAt(completedAt *time.Time) TaskOption {
+	return func(t *Task) { t.CompletedAt = completedAt }
 }
 
 func WithRrule(rrule rrule.RRule) TaskOption {
@@ -79,12 +84,13 @@ func NewTask(opts ...TaskOption) Task {
 	now := time.Now()
 
 	task := Task{
-		ID:        gen,
-		Active:    true,
-		Star:      false,
-		Title:     "New task",
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:          gen,
+		Active:      true,
+		Star:        false,
+		Title:       "New task",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		CompletedAt: nil,
 	}
 
 	for _, opt := range opts {
@@ -96,47 +102,4 @@ func NewTask(opts ...TaskOption) Task {
 	}
 
 	return task
-}
-
-// --- COMPLETION ---
-
-type Completion struct {
-	ID             string
-	TaskID         string
-	OccurrenceDate time.Time
-	CompletedAt    time.Time
-}
-
-type CompletionOption func(*Completion)
-
-// Opções para Completion
-func WithCompletionID(id string) CompletionOption {
-	return func(c *Completion) { c.ID = id }
-}
-
-func WithOccurrenceDate(date time.Time) CompletionOption {
-	return func(c *Completion) { c.OccurrenceDate = date }
-}
-
-// Construtor de Completion
-func NewCompletion(taskID string, opts ...CompletionOption) Completion {
-	gen, err := nanoid.Generate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 21)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	now := time.Now()
-
-	comp := Completion{
-		ID:             gen,
-		TaskID:         taskID, // TaskID é obrigatório, por isso está no argumento fixo
-		OccurrenceDate: now,
-		CompletedAt:    now,
-	}
-
-	for _, opt := range opts {
-		opt(&comp)
-	}
-
-	return comp
 }

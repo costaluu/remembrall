@@ -17,6 +17,7 @@ import (
 )
 
 var rruleRegex *regexp.Regexp = regexp.MustCompile(`f:\[(.*?)\]|f:([^\s]+)`)
+var dateRegex *regexp.Regexp = regexp.MustCompile(`d:\[(.*?)\]|d:([^\s]+)`)
 
 func processAddCandidateString(raw string) (*rrule.RRule, *time.Time, bool) {
 	parser, err := naturaltime.New()
@@ -27,10 +28,16 @@ func processAddCandidateString(raw string) (*rrule.RRule, *time.Time, bool) {
 
 	now := time.Now()
 
-	date, err := parser.ParseDate(raw, now)
+	dateMatch := dateRegex.FindStringSubmatch(raw)
 
-	if err != nil {
-		logger.Fatal(err)
+	var date *time.Time = nil
+
+	if len(dateMatch) > 0 {
+		date, err = parser.ParseDate(dateMatch[1], now)
+
+		if err != nil {
+			logger.Fatal(err)
+		}
 	}
 
 	rruleMatch := rruleRegex.FindStringSubmatch(raw)
@@ -55,7 +62,9 @@ func processAddCandidateString(raw string) (*rrule.RRule, *time.Time, bool) {
 
 	var rruleResult *rrule.RRule = nil
 
-	if rruleOptions != nil {
+	if rruleOptions != nil && date != nil {
+		rruleOptions.Dtstart = *date
+
 		rruleResult, err = rrule.NewRRule(*rruleOptions)
 
 		if err != nil {
@@ -63,12 +72,20 @@ func processAddCandidateString(raw string) (*rrule.RRule, *time.Time, bool) {
 		}
 
 		return rruleResult, &rruleResult.OrigOptions.Dtstart, rruleResult.OrigOptions.Dtstart.Before(time.Now().Add(-1 * time.Minute)) // verify if it's past
-	} else {
-		if date != nil {
-			return nil, date, date.Before(time.Now().Add(-1 * time.Minute)) // verify if it's past
-		} else {
-			return nil, nil, false
+	} else if rruleOptions != nil && date == nil {
+		rruleOptions.Dtstart = now
+
+		rruleResult, err = rrule.NewRRule(*rruleOptions)
+
+		if err != nil {
+			logger.Fatal(err)
 		}
+
+		return rruleResult, &rruleResult.OrigOptions.Dtstart, rruleResult.OrigOptions.Dtstart.Before(time.Now().Add(-1 * time.Minute)) // verify if it's past
+	} else if rruleOptions == nil && date != nil {
+		return nil, date, date.Before(time.Now().Add(-1 * time.Minute)) // verify if it's past
+	} else {
+		return nil, nil, false
 	}
 }
 
@@ -96,7 +113,13 @@ var AddCommand *cli.Command = &cli.Command{
 
 			rrule, dtstart, isPast = processAddCandidateString(candidate)
 
-			candidates = append(candidates, types.Candidate{Title: strings.TrimSpace(rruleRegex.ReplaceAllString(candidate, "")), Rrule: rrule, Dtstart: dtstart, IsPast: isPast})
+			candidates = append(candidates,
+				types.Candidate{
+					Title:   strings.TrimSpace(dateRegex.ReplaceAllString(rruleRegex.ReplaceAllString(candidate, ""), "")),
+					Rrule:   rrule,
+					Dtstart: dtstart,
+					IsPast:  isPast,
+				})
 
 			if isPast {
 				enterValidationMode = true

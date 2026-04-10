@@ -13,17 +13,17 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-var tasksIdToRemove []string
+var tasksIdToCheck []string
 
-var RmCommand *cli.Command = &cli.Command{
-	Name:  "rm",
-	Usage: "delete tasks",
+var CheckCommand *cli.Command = &cli.Command{
+	Name:  "check",
+	Usage: "check tasks",
 	Arguments: []cli.Argument{
 		&cli.StringArgs{
 			Name:        "tasks",
 			Min:         0,
 			Max:         -1,
-			Destination: &tasksIdToRemove,
+			Destination: &tasksIdToCheck,
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -35,12 +35,12 @@ var RmCommand *cli.Command = &cli.Command{
 			logger.Fatal(err)
 		}
 
-		if len(tasksIdToRemove) == 0 {
+		if len(tasksIdToCheck) == 0 {
 			logger.Info("please inform one or more ids")
 			os.Exit(0)
 		}
 
-		for _, id := range tasksIdToRemove {
+		for _, id := range tasksIdToCheck {
 			var trueId string = id
 			var showRealId string = ""
 
@@ -53,11 +53,12 @@ var RmCommand *cli.Command = &cli.Command{
 				}
 			}
 
-			var result bool = db.DeleteTask(database, trueId)
+			var result error = db.CompleteTask(database, trueId)
 
-			if result {
-				logger.Info(fmt.Sprintf("task %s deleted%s", id, showRealId))
+			if result != nil {
+				logger.Info(fmt.Sprintf("task %s checked%s", id, showRealId))
 			} else {
+				logger.Info(result)
 				logger.Error(fmt.Sprintf("task %s not found%s", id, showRealId))
 			}
 		}

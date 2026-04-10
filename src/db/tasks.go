@@ -6,20 +6,22 @@ import (
 	"time"
 
 	"github.com/costaluu/taskthing/src/logger"
+	rrule "github.com/teambition/rrule-go"
 )
 
 // ─── CREATE ──────────────────────────────────────────────────────────────────
 
 func CreateTask(db *sql.DB, task *Task) *Task {
 	_, err := db.Exec(`
-        INSERT INTO tasks (id, active, title, dtstart, rrule, until, count, next_occurrence)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		task.ID, boolToInt(task.Active), task.Title,
+        INSERT INTO tasks (id, active, title, star, dtstart, rrule, until, count, next_occurrence, completed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		task.ID, boolToInt(task.Active), task.Title, task.Star,
 		nullableTime(task.Dtstart),
 		task.Rrule,
 		nullableTime(task.Until),
 		task.Count,
 		nullableTime(task.NextOccurrence),
+		nullableTime(task.CompletedAt),
 	)
 
 	if err != nil {
@@ -32,57 +34,89 @@ func CreateTask(db *sql.DB, task *Task) *Task {
 // ─── READ ─────────────────────────────────────────────────────────────────────
 
 func GetTask(db *sql.DB, id string) (*Task, error) {
-	row := db.QueryRow(`SELECT id, active, title, dtstart, rrule, until, count, next_occurrence, created_at, updated_at FROM tasks WHERE id = ?`, id)
-	return scanTask(row)
+	row := db.QueryRow(`
+		SELECT
+			id, active, title, star, rrule,
+			dtstart, until, count, next_occurrence,
+			completed_at, created_at, updated_at
+		FROM tasks
+		WHERE id = ?
+	`, id)
+
+	task, err := scanTask(row.Scan)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("GetTask: %w", err)
+	}
+
+	return task, nil
 }
 
-func ListTasks(db *sql.DB, onlyActive bool) []*Task {
-	query := `SELECT id, active, title, dtstart, rrule, until, count, next_occurrence, created_at, updated_at FROM tasks`
-	if onlyActive {
-		query += ` WHERE active = 1`
-	}
-	query += ` ORDER BY next_occurrence ASC NULLS LAST`
+func ListTasks(db *sql.DB, cut string) ([]*Task, []*Task) {
+	now := time.Now().UTC()
 
-	rows, err := db.Query(query)
+	var cutTime time.Time
+
+	switch cut {
+	case "day":
+		cutTime = now.AddDate(0, 0, 1)
+	case "week":
+		cutTime = now.AddDate(0, 0, 7)
+	case "month":
+		cutTime = now.AddDate(0, 1, 0)
+	case "year":
+		cutTime = now.AddDate(1, 0, 0)
+	default:
+		logger.Fatal(fmt.Sprintf("ListTasks: invalid cut %q (expected day, week, month, year)", cut))
+	}
+
+	rows, err := db.Query(`
+    SELECT
+        id, active, title, star, rrule,
+        dtstart, until, count, next_occurrence,
+        completed_at, created_at, updated_at
+    FROM tasks
+    WHERE
+        active = 1
+        AND (
+            (rrule IS NOT NULL AND next_occurrence <= ?)
+
+            OR (rrule IS NULL AND dtstart IS NOT NULL AND DATE(dtstart) <= DATE(?))
+
+            OR (rrule IS NULL AND dtstart IS NULL)
+        )
+    ORDER BY
+        COALESCE(next_occurrence, dtstart) ASC NULLS LAST
+`,
+		cutTime.Format(time.RFC3339),
+		cutTime.Format(time.RFC3339),
+	)
+
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer rows.Close()
+
+	tasks, err := scanTasks(rows)
 
 	if err != nil {
 		logger.Fatal(err)
 	}
 
-	defer rows.Close()
+	active := make([]*Task, 0)
+	inactive := make([]*Task, 0)
 
-	return scanTasks(rows)
-}
-
-// DailyTasks returns overdue tasks and tasks due today (by next_occurrence).
-func DailyTasks(db *sql.DB) (overdue []*Task, today []*Task, err error) {
-	now := time.Now()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	endOfDay := startOfDay.Add(24 * time.Hour)
-
-	rows, err := db.Query(`
-		SELECT id, active, title, dtstart, rrule, until, count, next_occurrence, created_at, updated_at
-		FROM tasks
-		WHERE active = 1 AND next_occurrence IS NOT NULL AND next_occurrence < ?
-		ORDER BY next_occurrence ASC`,
-		endOfDay.UTC().Format(time.RFC3339),
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer rows.Close()
-
-	all := scanTasks(rows)
-
-	for _, task := range all {
-		if task.NextOccurrence.Before(startOfDay) {
-			overdue = append(overdue, task)
+	for _, task := range tasks {
+		if task.CompletedAt != nil {
+			inactive = append(inactive, task)
 		} else {
-			today = append(today, task)
+			active = append(active, task)
 		}
 	}
 
-	return overdue, today, nil
+	return active, inactive
 }
 
 // ─── UPDATE ──────────────────────────────────────────────────────────────────
@@ -138,62 +172,87 @@ func DeleteTask(db *sql.DB, id string) bool {
 
 // ─── COMPLETE ────────────────────────────────────────────────────────────────
 
-// CompleteTask marks the current next_occurrence as done, advances to the next one,
-// and writes a completion record.
-// func CompleteTask(db *sql.DB, id string, note *string) (*Completion, error) {
-// 	task, err := GetTask(db, id)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if task.NextOccurrence == nil {
-// 		return nil, fmt.Errorf("task %q has no pending occurrence", id)
-// 	}
+func computeNext(task *Task, from time.Time) *time.Time {
+	if task.Rrule == nil {
+		return nil
+	}
 
-// 	occDate := *task.NextOccurrence
+	rOption, err := rrule.StrToROption(*task.Rrule)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("computeNext: invalid rrule %q: %v", *task.Rrule, err))
+	}
 
-// 	// Advance next_occurrence past the one we just completed
-// 	next := computeNext(task, occDate)
+	if task.Dtstart != nil {
+		rOption.Dtstart = *task.Dtstart
+	}
 
-// 	tx, err := db.Begin()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer tx.Rollback() //nolint
+	rule, err := rrule.NewRRule(*rOption)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("computeNext: failed to build rrule: %v", err))
+	}
 
-// 	completion := &Completion{
-// 		ID:             newID(),
-// 		TaskID:         id,
-// 		OccurrenceDate: occDate,
-// 		CompletedAt:    time.Now(),
-// 		Note:           note,
-// 	}
+	// After retorna a próxima ocorrência estritamente depois de from
+	next := rule.After(from, false)
+	if next.IsZero() {
+		return nil
+	}
 
-// 	_, err = tx.Exec(`
-// 		INSERT INTO completions (id, task_id, occurrence_date, completed_at, note)
-// 		VALUES (?, ?, ?, ?, ?)`,
-// 		completion.ID, completion.TaskID,
-// 		completion.OccurrenceDate.UTC().Format(time.RFC3339),
-// 		completion.CompletedAt.UTC().Format(time.RFC3339),
-// 		note,
-// 	)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("insert completion: %w", err)
-// 	}
+	return &next
+}
 
-// 	_, err = tx.Exec(`
-// 		UPDATE tasks SET next_occurrence = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-// 		nullableTime(next), id,
-// 	)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("advance next_occurrence: %w", err)
-// 	}
+func CompleteTask(db *sql.DB, id string) error {
+	task, err := GetTask(db, id)
+	if err != nil {
+		return fmt.Errorf("CompleteTask: %w", err)
+	}
+	if task == nil {
+		return fmt.Errorf("CompleteTask: task %q not found", id)
+	}
+	if task.CompletedAt != nil {
+		return fmt.Errorf("CompleteTask: task %q is already completed", id)
+	}
 
-// 	if err := tx.Commit(); err != nil {
-// 		return nil, err
-// 	}
+	now := time.Now().UTC()
 
-// 	return completion, nil
-// }
+	// task sem rrule: só marca como completa
+	if task.Rrule == nil {
+		_, err = db.Exec(`
+			UPDATE tasks
+			SET completed_at = ?, updated_at = ?
+			WHERE id = ?
+		`, now.Format(time.RFC3339), now.Format(time.RFC3339), id)
+		if err != nil {
+			return fmt.Errorf("CompleteTask: %w", err)
+		}
+		return nil
+	}
+
+	// task com rrule: marca como completa e avança next_occurrence
+	if task.NextOccurrence == nil {
+		return fmt.Errorf("CompleteTask: task %q has rrule but no next_occurrence", id)
+	}
+
+	next := computeNext(task, *task.NextOccurrence)
+
+	_, err = db.Exec(`
+		UPDATE tasks
+		SET
+			completed_at  = ?,
+			next_occurrence = ?,
+			updated_at    = ?
+		WHERE id = ?
+	`,
+		now.Format(time.RFC3339),
+		nullableTime(next),
+		now.Format(time.RFC3339),
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("CompleteTask: %w", err)
+	}
+
+	return nil
+}
 
 // ─── COMPLETIONS VIEW ────────────────────────────────────────────────────────
 
@@ -241,116 +300,86 @@ func DeleteTask(db *sql.DB, id string) bool {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-func scanTask(row *sql.Row) (*Task, error) {
-	task := &Task{}
-	var activeInt int
-	var dtstartStr sql.NullString
-	var createdStr, updatedStr string
-	var rruleStr sql.NullString
-	var untilStr, nextStr sql.NullString
-	var count sql.NullInt64
+func scanTask(scan func(...any) error) (*Task, error) {
+	var task Task
+	var active, star int
+	var dtstart, until, nextOccurrence, completedAt *string
+	var createdAt, updatedAt string
 
-	err := row.Scan(
-		&task.ID, &activeInt, &task.Title, &dtstartStr,
-		&rruleStr,
-		&untilStr, &count, &nextStr,
-		&createdStr, &updatedStr,
+	err := scan(
+		&task.ID,
+		&active,
+		&task.Title,
+		&star,
+		&task.Rrule,
+		&dtstart,
+		&until,
+		&task.Count,
+		&nextOccurrence,
+		&completedAt,
+		&createdAt,
+		&updatedAt,
 	)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("task not found")
-	}
 	if err != nil {
 		return nil, err
 	}
 
-	task.Active = activeInt == 1
+	task.Active = active == 1
+	task.Star = star == 1
 
-	if dtstartStr.Valid {
-		t, _ := time.Parse(time.RFC3339, dtstartStr.String)
-		task.Dtstart = &t
+	parseOptional := func(s *string) (*time.Time, error) {
+		if s == nil || *s == "" {
+			return nil, nil
+		}
+		for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
+			if t, err := time.ParseInLocation(layout, *s, time.UTC); err == nil {
+				return &t, nil
+			}
+		}
+		return nil, fmt.Errorf("unrecognized time format: %q", *s)
 	}
 
-	task.CreatedAt, _ = time.Parse(time.RFC3339, createdStr)
-	task.UpdatedAt, _ = time.Parse(time.RFC3339, updatedStr)
-
-	if rruleStr.Valid {
-		task.Rrule = &rruleStr.String
+	parseRequired := func(s string) (time.Time, error) {
+		for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
+			if t, err := time.ParseInLocation(layout, s, time.UTC); err == nil {
+				return t, nil
+			}
+		}
+		return time.Time{}, fmt.Errorf("unrecognized time format: %q", s)
 	}
 
-	if untilStr.Valid {
-		u, _ := time.Parse(time.RFC3339, untilStr.String)
-		task.Until = &u
+	if task.Dtstart, err = parseOptional(dtstart); err != nil {
+		return nil, fmt.Errorf("dtstart: %w", err)
 	}
-	if count.Valid {
-		c := int(count.Int64)
-		task.Count = &c
+	if task.Until, err = parseOptional(until); err != nil {
+		return nil, fmt.Errorf("until: %w", err)
 	}
-	if nextStr.Valid {
-		n, _ := time.Parse(time.RFC3339, nextStr.String)
-		task.NextOccurrence = &n
+	if task.NextOccurrence, err = parseOptional(nextOccurrence); err != nil {
+		return nil, fmt.Errorf("next_occurrence: %w", err)
 	}
-	return task, nil
+	if task.CompletedAt, err = parseOptional(completedAt); err != nil {
+		return nil, fmt.Errorf("completed_at: %w", err)
+	}
+	if task.CreatedAt, err = parseRequired(createdAt); err != nil {
+		return nil, fmt.Errorf("created_at: %w", err)
+	}
+	if task.UpdatedAt, err = parseRequired(updatedAt); err != nil {
+		return nil, fmt.Errorf("updated_at: %w", err)
+	}
+
+	return &task, nil
 }
 
-func scanTasks(rows *sql.Rows) []*Task {
-	var out []*Task
+func scanTasks(rows *sql.Rows) ([]*Task, error) {
+	var tasks []*Task
 	for rows.Next() {
-		task := &Task{}
-		var activeInt int
-		var dtstartStr, createdStr, updatedStr string
-		var rruleStr sql.NullString
-		var untilStr, nextStr sql.NullString
-		var count sql.NullInt64
-
-		err := rows.Scan(
-			&task.ID, &activeInt, &task.Title, &dtstartStr,
-			&rruleStr,
-			&untilStr, &count, &nextStr,
-			&createdStr, &updatedStr,
-		)
+		task, err := scanTask(rows.Scan)
 		if err != nil {
-			logger.Fatal(err)
+			return nil, err
 		}
-
-		task.Active = activeInt == 1
-
-		var dtStart time.Time
-
-		dtStart, _ = time.Parse(time.RFC3339, dtstartStr)
-
-		task.Dtstart = &dtStart
-		task.CreatedAt, _ = time.Parse(time.RFC3339, createdStr)
-		task.UpdatedAt, _ = time.Parse(time.RFC3339, updatedStr)
-
-		if rruleStr.Valid {
-			task.Rrule = &rruleStr.String
-		}
-
-		if untilStr.Valid {
-			u, _ := time.Parse(time.RFC3339, untilStr.String)
-			task.Until = &u
-		}
-
-		if count.Valid {
-			c := int(count.Int64)
-			task.Count = &c
-		}
-
-		if nextStr.Valid {
-			n, _ := time.Parse(time.RFC3339, nextStr.String)
-			task.NextOccurrence = &n
-		}
-
-		out = append(out, task)
+		tasks = append(tasks, task)
 	}
-
-	var scanError error = rows.Err()
-
-	if scanError != nil {
-		logger.Fatal(scanError)
-	}
-
-	return out
+	return tasks, rows.Err()
 }
 
 func boolToInt(b bool) int {

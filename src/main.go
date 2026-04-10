@@ -29,6 +29,7 @@ func main() {
 			cmd.AddCommand,
 			cmd.RmCommand,
 			cmd.ListCommand,
+			cmd.CheckCommand,
 			cmd.TestCommand,
 		},
 	}
