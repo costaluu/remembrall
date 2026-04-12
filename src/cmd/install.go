@@ -9,7 +9,6 @@ import (
 	"charm.land/huh/v2"
 	"github.com/costaluu/taskthing/src/config"
 	"github.com/costaluu/taskthing/src/constants"
-	"github.com/costaluu/taskthing/src/db"
 	"github.com/costaluu/taskthing/src/filesystem"
 	"github.com/costaluu/taskthing/src/logger"
 	"github.com/urfave/cli/v3"
@@ -115,12 +114,6 @@ var InstallCommand *cli.Command = &cli.Command{
 		logger.Success("time format set to " + timeFormat + ".")
 
 		SetDatabaseLocationCommandAction(ctx, cmd)
-
-		logger.Info("applying migrations...")
-
-		db.ApplyAllMigrations()
-
-		logger.Success("migrations applied successfully")
 
 		logger.Success("setup completed successfully!")
 

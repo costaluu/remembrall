@@ -8,6 +8,7 @@ import (
 
 type Candidate struct {
 	Title   string
+	Star    bool
 	Rrule   *rrule.RRule
 	Dtstart *time.Time
 	IsPast  bool

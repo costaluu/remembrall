@@ -6,8 +6,10 @@ import (
 	"os"
 
 	"charm.land/huh/v2"
+	spinner "charm.land/huh/v2/spinner"
 	"github.com/costaluu/taskthing/src/config"
 	"github.com/costaluu/taskthing/src/constants"
+	"github.com/costaluu/taskthing/src/db"
 	"github.com/costaluu/taskthing/src/logger"
 	"github.com/urfave/cli/v3"
 )
@@ -94,38 +96,126 @@ var AmericanTimeFormatCommand *cli.Command = &cli.Command{
 
 func SetDatabaseLocationCommandAction(ctx context.Context, cmd *cli.Command) error {
 	currentConfig := config.LoadConfig()
-	var newLocation string
-	var oldLocation string = currentConfig.DatabaseLocation
+	defaultConfig := config.GetDefaultConfig()
 
-	if currentConfig.DatabaseLocation == "" {
-		defaultConfig := config.GetDefaultConfig()
-		oldLocation = defaultConfig.DatabaseLocation
+	oldDatabaseConnection, err := db.Open()
+
+	if err != nil {
+		logger.Fatal(err)
 	}
 
-	huh.NewInput().
+	var newLocation string = defaultConfig.DatabaseLocation
+
+	var databaseLocationOption string = "Local"
+
+	huh.NewSelect[string]().
+		Options(huh.NewOptions("Local", "Remote (LibSQL)")...).
+		Value(&databaseLocationOption).
 		Title("Where's your database ?").
-		Prompt("?").
-		Placeholder(oldLocation).
-		Value(&newLocation).
 		Run()
 
-	if newLocation == "" {
-		currentConfig.DatabaseLocation = oldLocation
-	} else {
-		currentConfig.DatabaseLocation = newLocation
+	if databaseLocationOption == "Remote (LibSQL)" {
+		var baseURL string = ""
+		var jwtToken string = ""
+
+		for {
+			baseURL = ""
+			jwtToken = ""
+
+			form := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().
+						Title("Database base URL").
+						Prompt(">").
+						Value(&baseURL),
+				),
+				huh.NewGroup(
+					huh.NewInput().
+						Title("Database Token").
+						Prompt(">").
+						Value(&jwtToken),
+				),
+			)
+
+			err := form.Run()
+
+			if err != nil {
+				logger.Fatal(err)
+			}
+
+			if baseURL != "" || jwtToken != "" {
+				break
+			}
+		}
+
+		newLocation = fmt.Sprintf("%s/?authToken=%s", baseURL, jwtToken)
 	}
 
 	if os.Getenv("DEV_MODE") == "true" {
 		currentConfig.DatabaseLocation = "./dev.db"
+	} else {
+		currentConfig.DatabaseLocation = newLocation
 	}
 
-	err := config.SaveConfig(currentConfig)
+	err = config.SaveConfig(currentConfig)
 
 	if err != nil {
 		logger.Fatal("Failed to save config: " + err.Error())
 	}
 
 	logger.Success("database location set to: " + currentConfig.DatabaseLocation)
+
+	newDatabaseConnection, err := db.Open()
+
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	var isOldDatabaseEmpty bool = !db.SchemaMigrationsExists(oldDatabaseConnection)
+	var isNewDatabaseEmpty bool = !db.SchemaMigrationsExists(newDatabaseConnection)
+
+	if isOldDatabaseEmpty {
+		logger.Info("applying migrations...")
+
+		db.ApplyAllMigrations()
+
+		logger.Success("migrations applied successfully")
+	} else {
+		if isNewDatabaseEmpty {
+			var migrateEverything bool
+
+			err = huh.NewConfirm().
+				Title("New database is empty, do you want to migrate your data? (recommended)").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&migrateEverything).
+				Run()
+
+			if migrateEverything {
+				db.ApplyAllMigrations()
+
+				runner := func() {
+					db.MigrateDatabases(oldDatabaseConnection, newDatabaseConnection)
+				}
+
+				_ = spinner.New().
+					Title("migrating data...").
+					Type(spinner.Dots).
+					Action(runner).
+					Run()
+
+				logger.Success("database migrated!")
+			}
+		} else {
+			logger.Info("applying peding database migrations...")
+
+			appliedAnyMigration := db.ApplyMigrations()
+
+			if !appliedAnyMigration {
+				logger.Info("no migrations to apply")
+			}
+		}
+	}
 
 	return nil
 }

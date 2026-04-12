@@ -49,12 +49,13 @@ func WithCompletedAt(completedAt *time.Time) TaskOption {
 
 func WithRrule(rrule rrule.RRule) TaskOption {
 	var rrulestr = rrule.String()
+	var dtStartLocal time.Time = rrule.OrigOptions.Dtstart.Local()
 
-	next := rrule.After(time.Now(), false)
+	next := rrule.After(dtStartLocal, true)
 
 	return func(t *Task) {
 		t.Rrule = &rrulestr
-		t.Dtstart = &rrule.OrigOptions.Dtstart
+		t.Dtstart = &dtStartLocal
 		t.Until = &rrule.OrigOptions.Until
 		t.Count = &rrule.OrigOptions.Count
 

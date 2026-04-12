@@ -54,7 +54,7 @@ func newThemeStyles(theme constants.Theme) themeStyles {
 
 	// dark (default)
 	return themeStyles{
-		title:         lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("228")).Background(lipgloss.Color("63")).Padding(0, 1).Margin(1),
+		title:         lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("228")).Background(lipgloss.Color("63")).Margin(1),
 		labelToday:    lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Background(lipgloss.Color("236")),
 		labelTomorrow: lipgloss.NewStyle().Foreground(lipgloss.Color("33")).Background(lipgloss.Color("236")),
 		labelOther:    lipgloss.NewStyle().Foreground(lipgloss.Color("246")).Background(lipgloss.Color("236")),
@@ -134,13 +134,13 @@ func PrintTasks(tasks []db.Task, completedTasks []db.Task, showCompleted bool, c
 
 	if len(tasks) == 0 {
 		if cut == "day" {
-			fmt.Println(s.taskText.Render(fmt.Sprintf("  no tasks for today")))
+			fmt.Println(s.taskText.Render("  no tasks for today"))
 		} else if cut == "week" {
-			fmt.Println(s.taskText.Render(fmt.Sprintf("  no tasks for this week")))
+			fmt.Println(s.taskText.Render("  no tasks for this week"))
 		} else if cut == "month" {
-			fmt.Println(s.taskText.Render(fmt.Sprintf("  no tasks for this month")))
+			fmt.Println(s.taskText.Render("  no tasks for this month"))
 		} else {
-			fmt.Println(s.taskText.Render(fmt.Sprintf("  no tasks for this year")))
+			fmt.Println(s.taskText.Render("  no tasks for this year"))
 		}
 
 		return
@@ -194,7 +194,7 @@ func PrintTasks(tasks []db.Task, completedTasks []db.Task, showCompleted bool, c
 		star := ""
 
 		if task.Star {
-			star = " " + s.star.Render("")
+			star = " " + s.star.Render("")
 		}
 
 		recurring := ""

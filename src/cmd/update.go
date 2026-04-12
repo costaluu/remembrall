@@ -310,7 +310,11 @@ var UpdateApplyCommand *cli.Command = &cli.Command{
 
 				DownloadAndReplaceBinary(remembrallURL, binDir, currentBin, oldBin)
 
-				db.ApplyMigrations()
+				appliedAnyMigration := db.ApplyMigrations()
+
+				if !appliedAnyMigration {
+					logger.Info("no migrations to apply")
+				}
 			}
 
 			_ = spinner.New().

@@ -21,3 +21,15 @@ func ReplaceTildeWithHomeDir(path string) string {
 func IsNumeric(s string) bool {
 	return regexp.MustCompile(`^[0-9]+$`).MatchString(s)
 }
+
+func TrimSpaces(s string) string {
+	// Trim leading and trailing spaces
+	s = strings.TrimSpace(s)
+
+	// Replace multiple consecutive spaces with a single space
+	for strings.Contains(s, "  ") {
+		s = strings.ReplaceAll(s, "  ", " ")
+	}
+
+	return s
+}

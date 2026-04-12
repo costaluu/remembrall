@@ -29,6 +29,10 @@ func GetDefaultConfig() Config {
 
 	err := json.Unmarshal(defaultConfigLinuxDarwin, &defaultConfig)
 
+	if os.Getenv("DEV_MODE") != "true" {
+		defaultConfig.DatabaseLocation = "./dev.db"
+	}
+
 	if err != nil {
 		logger.Fatal("Failed to read default config: " + err.Error())
 	}

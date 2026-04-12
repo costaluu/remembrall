@@ -5,6 +5,7 @@ import (
 
 	"charm.land/huh/v2"
 	"github.com/costaluu/taskthing/src/config"
+	"github.com/costaluu/taskthing/src/db"
 	"github.com/costaluu/taskthing/src/logger"
 	"github.com/urfave/cli/v3"
 )
@@ -17,9 +18,9 @@ var ResetCommand *cli.Command = &cli.Command{
 
 		err :=
 			huh.NewConfirm().
-				Title("Are you sure? This will reset all configurations and clear everything.").
+				Title("Are you sure? This will reset all configurations and clear all tasks.").
 				Affirmative("Yes").
-				Negative("No.").
+				Negative("No").
 				Value(&confirm).
 				Run()
 
@@ -28,13 +29,21 @@ var ResetCommand *cli.Command = &cli.Command{
 		}
 
 		if !confirm {
-			logger.Info("Reset cancelled.")
+			logger.Info("aborting...")
 			return nil
 		}
 
+		database, err := db.Open()
+
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		db.TruncateTasks(database)
+
 		config.CreateConfig()
 
-		logger.Success("All configurations reset and everything cleared.")
+		logger.Success("tasks deleted and default configurations applied!")
 
 		return nil
 	},

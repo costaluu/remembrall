@@ -30,6 +30,7 @@ func main() {
 			cmd.RmCommand,
 			cmd.ListCommand,
 			cmd.CheckCommand,
+			cmd.StarCommand,
 			cmd.TestCommand,
 		},
 	}

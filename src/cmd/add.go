@@ -11,6 +11,7 @@ import (
 	"github.com/costaluu/taskthing/src/md"
 	rruleparser "github.com/costaluu/taskthing/src/rrule-parser"
 	"github.com/costaluu/taskthing/src/types"
+	"github.com/costaluu/taskthing/src/utils"
 	"github.com/sho0pi/naturaltime"
 	"github.com/teambition/rrule-go"
 	"github.com/urfave/cli/v3"
@@ -18,6 +19,7 @@ import (
 
 var rruleRegex *regexp.Regexp = regexp.MustCompile(`f:\[(.*?)\]|f:([^\s]+)`)
 var dateRegex *regexp.Regexp = regexp.MustCompile(`d:\[(.*?)\]|d:([^\s]+)`)
+var starRegex *regexp.Regexp = regexp.MustCompile(`\s-s\s`)
 
 func processAddCandidateString(raw string) (*rrule.RRule, *time.Time, bool) {
 	parser, err := naturaltime.New()
@@ -113,9 +115,14 @@ var AddCommand *cli.Command = &cli.Command{
 
 			rrule, dtstart, isPast = processAddCandidateString(candidate)
 
+			var star bool = strings.Contains(candidate, "-s")
+
+			var title string = utils.TrimSpaces(strings.ReplaceAll(dateRegex.ReplaceAllString(rruleRegex.ReplaceAllString(candidate, ""), ""), "-s", ""))
+
 			candidates = append(candidates,
 				types.Candidate{
-					Title:   strings.TrimSpace(dateRegex.ReplaceAllString(rruleRegex.ReplaceAllString(candidate, ""), "")),
+					Title:   title,
+					Star:    star,
 					Rrule:   rrule,
 					Dtstart: dtstart,
 					IsPast:  isPast,

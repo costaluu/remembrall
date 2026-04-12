@@ -1,8 +1,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/costaluu/taskthing/src/logger"
@@ -55,7 +57,7 @@ func GetTask(db *sql.DB, id string) (*Task, error) {
 }
 
 func ListTasks(db *sql.DB, cut string) ([]*Task, []*Task) {
-	now := time.Now().UTC()
+	now := time.Now()
 
 	var cutTime time.Time
 
@@ -72,7 +74,10 @@ func ListTasks(db *sql.DB, cut string) ([]*Task, []*Task) {
 		logger.Fatal(fmt.Sprintf("ListTasks: invalid cut %q (expected day, week, month, year)", cut))
 	}
 
-	rows, err := db.Query(`
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := db.QueryContext(ctx, `
     SELECT
         id, active, title, star, rrule,
         dtstart, until, count, next_occurrence,
@@ -95,7 +100,8 @@ func ListTasks(db *sql.DB, cut string) ([]*Task, []*Task) {
 	)
 
 	if err != nil {
-		logger.Fatal(err)
+		logger.Error(err)
+		os.Exit(0)
 	}
 	defer rows.Close()
 
@@ -121,36 +127,38 @@ func ListTasks(db *sql.DB, cut string) ([]*Task, []*Task) {
 
 // ─── UPDATE ──────────────────────────────────────────────────────────────────
 
-// func UpdateTask(db *sql.DB, id string, title *string, active *bool, rruleStr *string) (*Task, error) {
-// 	task, err := GetTask(db, id)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+func UpdateTask(db *sql.DB, task Task) error {
+	_, err := db.Exec(`
+        UPDATE tasks 
+        SET active = ?, 
+            title = ?, 
+            star = ?, 
+            dtstart = ?, 
+            rrule = ?, 
+            until = ?, 
+            count = ?, 
+            next_occurrence = ?, 
+            completed_at = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`,
+		boolToInt(task.Active),
+		task.Title,
+		task.Star,
+		nullableTime(task.Dtstart),
+		task.Rrule,
+		nullableTime(task.Until),
+		task.Count,
+		nullableTime(task.NextOccurrence),
+		nullableTime(task.CompletedAt),
+		task.ID, // O ID vai por último para o WHERE
+	)
 
-// 	if title != nil {
-// 		task.Title = *title
-// 	}
-// 	if active != nil {
-// 		task.Active = *active
-// 	}
-// 	if rruleStr != nil {
-// 		task.Rrule = rruleStr
-// 	}
+	if err != nil {
+		return fmt.Errorf("update task: %w", err)
+	}
 
-// 	// Recompute next_occurrence
-// 	next := computeNext(task, time.Now().Add(-time.Second))
-// 	task.NextOccurrence = next
-
-// 	_, err = db.Exec(`
-// 		UPDATE tasks SET title = ?, active = ?, rrule = ?, next_occurrence = ?, updated_at = CURRENT_TIMESTAMP
-// 		WHERE id = ?`,
-// 		task.Title, boolToInt(task.Active), task.Rrule, nullableTime(task.NextOccurrence), id,
-// 	)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("update task: %w", err)
-// 	}
-// 	return task, nil
-// }
+	return nil
+}
 
 // ─── DELETE ──────────────────────────────────────────────────────────────────
 
@@ -212,7 +220,7 @@ func CompleteTask(db *sql.DB, id string) error {
 		return fmt.Errorf("CompleteTask: task %q is already completed", id)
 	}
 
-	now := time.Now().UTC()
+	now := time.Now()
 
 	// task sem rrule: só marca como completa
 	if task.Rrule == nil {
@@ -331,8 +339,9 @@ func scanTask(scan func(...any) error) (*Task, error) {
 		if s == nil || *s == "" {
 			return nil, nil
 		}
+
 		for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
-			if t, err := time.ParseInLocation(layout, *s, time.UTC); err == nil {
+			if t, err := time.ParseInLocation(layout, *s, time.Local); err == nil {
 				return &t, nil
 			}
 		}
@@ -341,7 +350,7 @@ func scanTask(scan func(...any) error) (*Task, error) {
 
 	parseRequired := func(s string) (time.Time, error) {
 		for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
-			if t, err := time.ParseInLocation(layout, s, time.UTC); err == nil {
+			if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
 				return t, nil
 			}
 		}
@@ -366,6 +375,10 @@ func scanTask(scan func(...any) error) (*Task, error) {
 	if task.UpdatedAt, err = parseRequired(updatedAt); err != nil {
 		return nil, fmt.Errorf("updated_at: %w", err)
 	}
+
+	var localTime time.Time = *task.Dtstart
+
+	task.Dtstart = &localTime
 
 	return &task, nil
 }
@@ -393,5 +406,5 @@ func nullableTime(t *time.Time) any {
 	if t == nil {
 		return nil
 	}
-	return t.UTC().Format(time.RFC3339)
+	return t.Format(time.RFC3339)
 }
